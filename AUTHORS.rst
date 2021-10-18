@@ -2,4 +2,4 @@
 Contributors
 ============
 
-* Mathieu Tachon <tachon.mathieu@protonmail.com>
+* Mathieu Tachon <tachon.mathieu@protonmail.com> - Main author
