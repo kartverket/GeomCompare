@@ -1,0 +1,10 @@
+- Add documentation/tests
+- Documentation on Readthedocs
+- Upgrade API of PostGISGeomRefDB and RtreeGeomRefDB classes so that
+  they match that of the SQLiteGeomRefDB class.
+- Add a 'query' argument to the function 'fetch_geoms_from_pg' so that
+  the user can write its own SQL queries that return geometries, which
+  will be directly converted to shapely geometric objects.
+- Add 'aoi' and 'aoi_epsg' arguments to the 'extract_geoms_from_file'
+  function.
+- Possibility to run geomcompare scripts?
