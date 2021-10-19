@@ -8,8 +8,11 @@ import sys
 import logging
 import inspect
 
-from osgeo import ogr, osr
-ogr.UseExceptions()
+try:
+    from osgeo import ogr, osr
+    ogr.UseExceptions()
+except ImportError:
+    pass
 from shapely import wkb
 from shapely.geometry import (LinearRing, LineString, MultiLineString,
                               MultiPoint, MultiPolygon, Point, Polygon)
@@ -136,6 +139,13 @@ def fetch_geoms_from_pg(schema, table, column, conn=None, host=None,
 
 def extract_geoms_from_file(filename, driver_name, layers=None, FIDs=None):
     logger = setup_logger()
+    try:
+        from osgeo import ogr
+        ogr.UseExceptions()
+    except ImportError:
+        raise NotImplementedError("You must install GDAL/OGR and its Python "
+                                  "bindings to call "
+                                  f"{inspect.stack()[0].function!r}!")
     if not os.path.exists(filename):
         raise ValueError(f"The file {filename!r} does not exist!")
     driver = ogr.GetDriverByName(driver_name)
@@ -176,6 +186,13 @@ def extract_geoms_from_file(filename, driver_name, layers=None, FIDs=None):
 def write_geoms_to_file(geoms_iter, geoms_epsg, filename, driver_name,
                         layer_name, mode="update"):
     logger = setup_logger()
+    try:
+        from osgeo import ogr, osr
+        ogr.UseExceptions()
+    except ImportError:
+        raise NotImplementedError("You must install GDAL/OGR and its Python "
+                                  "bindings to call "
+                                  f"{inspect.stack()[0].function!r}!")
     driver = ogr.GetDriverByName(driver_name)
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(geoms_epsg)

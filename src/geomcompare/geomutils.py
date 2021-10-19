@@ -2,18 +2,18 @@
 
 
 from functools import partial
-import shapely
+import shapely.ops
 import pyproj
-from osgeo import ogr
 
-geom_type_mapping = {"LinearRing": ogr.wkbLinearRing,
-                     "LineString": ogr.wkbLineString,
-                     "MultiLineString": ogr.wkbMultiLineString,
-                     "MultiPoint": ogr.wkbMultiPoint,
-                     "MultiPolygon": ogr.wkbMultiPolygon,
-                     "Point": ogr.wkbPoint,
-                     "Polygon": ogr.wkbPolygon,
-                     "GeometryCollection": ogr.wkbGeometryCollection}
+geom_type_mapping = {"LinearRing": 101, # ogr.wkbLinearRing
+                     "LineString": 2, # ogr.wkbLineString
+                     "MultiLineString": 5, #ogr.wkbMultiLineString
+                     "MultiPoint": 4, # ogr.wkbMultiPoint
+                     "MultiPolygon": 6, # ogr.wkbMultiPolygon
+                     "Point": 1, # ogr.wkbPoint
+                     "Polygon": 3, # ogr.wkbPolygon
+                     "GeometryCollection": 7, # ogr.wkbGeometryCollection
+                     }
 geom_type_mapping.update({v: k for k,v in geom_type_mapping.items()})
 
 
