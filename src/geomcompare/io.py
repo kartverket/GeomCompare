@@ -16,11 +16,9 @@ except ImportError:
 from shapely import wkb
 from shapely.geometry import (LinearRing, LineString, MultiLineString,
                               MultiPoint, MultiPolygon, Point, Polygon)
-import shapely.ops
-import pyproj
 import psycopg2
 
-from .geomutils import geom_type_mapping, get_transform_func
+from .geomutils import geom_type_mapping, get_transform_func, unchanged_geom
 
 
 def setup_logger(name=None, level=logging.INFO, show_pid=False):
@@ -99,45 +97,56 @@ def update_logger(logger, **kwargs):
     logger.setLevel(level)
 
 
-def fetch_geoms_from_pg(schema, table, column, conn=None, host=None,
-                        dbname=None, user=None, password=None, port=None,
-                        aoi=None, aoi_epsg=None, output_epsg=None):
+def fetch_geoms_from_pg(conn=None, host=None, dbname=None, user=None,
+                        password=None, port=None, sql_query=None, schema=None,
+                        table=None, column=None, aoi=None, aoi_epsg=None,
+                        output_epsg=None):
     if conn is None:
-        for k,v in locals().items():
-            if k not in ("conn", "aoi", "aoi_epsg", "output_epsg") and v is None:
-                raise ValueError(f"Argument {k!r} must be passed a value "
-                                 "different from None!")
+        for arg in ("host", "dbname", "user", "password", "port"):
+            if locals()[arg] is None:
+                raise ValueError(f"Argument {arg!r} must be passed a value "
+                                 "different from None!")        
         conn = psycopg2.connect(host=host, dbname=dbname, user=user,
                                 password=password, port=port)
-    else:
+    cursor = conn.cursor()
+    if sql_query is None:
         for arg in ("schema", "table", "column"):
             if locals()[arg] is None:
                 raise ValueError(f"Argument {arg!r} must be passed a value "
                                  "different from None!")
-    cursor = conn.cursor()
-    if aoi is not None or output_epsg is not None:
-        cursor.execute(f"SELECT Find_SRID('{schema}', '{table}', '{column}');")
-        pg_epsg = int(cursor.fetchone()[0])
-    where_filter = f"WHERE {column} IS NOT NULL"
-    if aoi is not None:
-        if  aoi_epsg is not None and int(aoi_epsg) != pg_epsg:
-            transform_aoi = get_transform_func(aoi_epsg, pg_epsg)
-            aoi = transform_aoi(aoi)
-        spatial_filter = (f" AND ST_Intersects({column}, "
-                          f"ST_GeomFromText('{aoi.wkt}', {pg_epsg}));")
-    else:
-        spatial_filter = ";"
-    if output_epsg is not None and int(output_epsg) != pg_epsg:
-        column = f"ST_Transform({column}, {output_epsg})"
-    sql_query = (f"SELECT ST_AsBinary({column}) FROM {schema}.{table} "
-                 f"{where_filter}{spatial_filter}")
+        if aoi is not None or output_epsg is not None:
+            cursor.execute(f"SELECT Find_SRID('{schema}', '{table}', "
+                           f"'{column}');")
+            pg_epsg = int(cursor.fetchone()[0])
+        where_filter = f"WHERE {column} IS NOT NULL"
+        if aoi is not None:
+            if  aoi_epsg is not None and int(aoi_epsg) != pg_epsg:
+                transform_aoi = get_transform_func(aoi_epsg, pg_epsg)
+                aoi = transform_aoi(aoi)
+            spatial_filter = (f" AND ST_Intersects({column}, "
+                              f"ST_GeomFromText('{aoi.wkt}', {pg_epsg}));")
+        else:
+            spatial_filter = ";"
+        if output_epsg is not None and int(output_epsg) != pg_epsg:
+            column = f"ST_Transform({column}, {output_epsg})"
+        sql_query = (f"SELECT ST_AsBinary({column}) FROM {schema}.{table} "
+                     f"{where_filter}{spatial_filter}")
     cursor.execute(sql_query)
     for row in cursor:
         yield wkb.loads(row[0].tobytes())
     conn = None    
 
 
-def extract_geoms_from_file(filename, driver_name, layers=None, FIDs=None):
+def _get_layer_epsg(layer):
+    lyr_srs = layer.GetSpatialRef()
+    if lyr_srs is not None and lyr_srs.AutoIdentifyEPSG() == 0:
+        return int(lyr_srs.GetAuthorityCode(None))
+    else:
+        return None
+    
+
+def extract_geoms_from_file(filename, driver_name, layers=None, aoi=None,
+                            aoi_epsg=None, attr_filter=None, fids=None):
     logger = setup_logger()
     try:
         from osgeo import ogr
@@ -159,27 +168,53 @@ def extract_geoms_from_file(filename, driver_name, layers=None, FIDs=None):
                              "names/indices!")
     else:
         layers = range(ds.GetLayerCount())
-    if FIDs is not None:
-        try:
-            FIDs = dict(FIDs)
-            for FID_seq in FIDs.values():
-	            assert isinstance(FID_seq, Sequence)
-	            assert all(isinstance(fid, Integral) for fid in FID_seq)
-        except (TypeError, AssertionError):
-            raise ValueError("Wrong format of the data passed to the "
-                             "FIDs argument!")
-    if FIDs is not None:
-        for lyr in layers:
-            lyr_obj = ds.GetLayer(lyr)
-            for feature in FIDs[lyr]:
+    ## for arg in ("aoi", "aoi_epsg", "attr_filter", "fids"):
+    ##     try:
+    ##         if locals()[arg] is not None:
+    ##             locals()[arg] = dict(locals()[arg])
+    ##         else:
+    ##             locals()[arg] = dict()
+    ##             print(aoi is None)
+    ##     except (TypeError, ValueError):
+    ##         logger.error(f"The argument {arg_name!r} must passed a mapping "
+    ##                      f"of layer names and corresponding {arg_name!r} value.")
+    ##         raise
+    if aoi is None:
+        aoi = dict()
+    if aoi_epsg is None:
+        aoi_epsg = dict()
+    if attr_filter is None:
+        attr_filter = dict()
+    if fids is None:
+        fids = dict()
+
+
+    ############
+    for lyr in layers:
+        lyr_obj = ds.GetLayer(lyr)
+        lyr_aoi = aoi.get(lyr)
+        if lyr_aoi is not None:
+            lyr_aoi_epsg = aoi_epsg.get(lyr)
+            if lyr_aoi_epsg is not None:
+                lyr_aoi_epsg = int(lyr_aoi_epsg)
+                lyr_epsg = _get_layer_epsg(lyr_obj)
+                if lyr_epsg is not None and lyr_epsg != lyr_aoi_epsg:
+                    transform_aoi = get_transform_func(lyr_aoi_epsg, lyr_epsg)
+                    lyr_aoi = transform_aoi(lyr_aoi)
+            lyr_obj = lyr_obj.SetSpatialFilter(ogr.CreateGeometryFromWkt(lyr_aoi.wkt))
+        lyr_attr_filter = attr_filter.get(lyr)
+        if lyr_attr_filter is not None:
+            lyr_obj = lyr_obj.SetAttributeFilter(lyr_attr_filter)
+        lyr_fids = fids.get(lyr)
+        if lyr_aoi is None and lyr_attr_filter is None and lyr_fids is not None:
+            for fid in lyr_fids:
+                feature = lyr_obj.GetFeature(fid)
                 geom = feature.GetGeometryRef()
                 yield wkb.loads(bytes(geom.ExportToWkb()))
-    else:
-        for lyr in layers:
-            lyr_obj = ds.GetLayer(lyr)
+        else:
             for feature in lyr_obj:
                 geom = feature.GetGeometryRef()
-                yield wkb.loads(bytes(geom.ExportToWkb()))        
+                yield wkb.loads(bytes(geom.ExportToWkb()))
     ds = None
  
 
@@ -194,6 +229,7 @@ def write_geoms_to_file(geoms_iter, geoms_epsg, filename, driver_name,
                                   "bindings to call "
                                   f"{inspect.stack()[0].function!r}!")
     driver = ogr.GetDriverByName(driver_name)
+    geoms_epsg = int(geoms_epsg)
     srs = osr.SpatialReference()
     srs.ImportFromEPSG(geoms_epsg)
     geoms_iter = iter(geoms_iter)
@@ -207,8 +243,8 @@ def write_geoms_to_file(geoms_iter, geoms_epsg, filename, driver_name,
         raise ValueError("Wrong value for the 'mode' argument: must be either "
                          "'update' or 'overwrite'!")
     if mode == "update":
-        _update_geoms_file(geoms_iter, geom_type, geoms_epsg, srs, filename, driver,
-                           layer_name, logger)
+        _update_geoms_file(geoms_iter, geom_type, geoms_epsg, srs,
+                           filename, driver, layer_name, logger)
     else:
         _write_geoms_file(geoms_iter, geom_type, srs, filename, driver,
                           layer_name, logger)
@@ -219,48 +255,35 @@ def _update_geoms_file(geoms_iter, geom_type, geoms_epsg, srs, filename, driver,
     ds = driver.Open(filename, 1)
     if ds is None:
         _write_geoms_file(geoms_iter, geom_type, srs, filename, driver,
-                          layer_name)
+                          layer_name, logger)
         return
     lyr_obj = ds.GetLayer(layer_name)
-    transform = False                 
+    if lyr_obj is None:
+        lyr_obj = ds.GetLayer()
+    transform_geom = unchanged_geom                
     if lyr_obj is None:
         lyr_obj = ds.CreateLayer(layer_name, srs=srs, geom_type=geom_type)
         lyr_def = lyr_obj.GetLayerDefn()        
     else:
         lyr_def = lyr_obj.GetLayerDefn()
-        lyr_srs = lyr_obj.GetSpatialRef()
-        if lyr_srs is not None and lyr_srs.AutoIdentifyEPSG() == 0:
-            lyr_epsg = int(lyr_srs.GetAuthorityCode(None))
-            if lyr_epsg != geoms_epsg:
-                logger.info("The spatial reference system of the output file "
-                            f"{filename!r}, layer {layer_name!r}, is different "
-                            "from that of the input geometry features. The "
-                            "geometry features will be reprojected before being "
-                            "added to the file.")
-                input_crs = pyproj.CRS(f"EPSG:{geoms_epsg}")
-                output_crs = pyproj.CRS(f"EPSG:{lyr_epsg}")
-                project = pyproj.Transformer.from_crs(input_crs, output_crs,
-                                                      always_xy=True).transform
-                transform = True
+        lyr_epsg = _get_layer_epsg(lyr_obj)
+        if lyr_epsg is not None and lyr_epsg !=geoms_epsg:
+            logger.info("The spatial reference system of the output file "
+                        f"{filename!r}, layer {layer_name!r}, is different "
+                        "from that of the input geometry features. The "
+                        "geometry features will be reprojected before being "
+                        "added to the file.")
+            transform_geom = get_transform_func(geoms_epsg, lyr_epsg)
         else:
             logger.info("The spatial reference system of the output file "
                         f"{filename!r}, layer {layer_name!r}, could not be "
                         "found or identified. Input geometry features will be "
                         "added to the file without transformation.")
-            transform = False
-    if transform:
-        for geom in geoms_iter:
-            feature = ogr.Feature(lyr_def)
-            feature.SetGeometry(ogr.CreateGeometryFromWkt(
-                shapely.ops.transform(project, geom).wkt))
-            lyr_obj.CreateFeature(feature)
-            feature = None        
-    else:
-        for geom in geoms_iter:
-            feature = ogr.Feature(lyr_def)
-            feature.SetGeometry(ogr.CreateGeometryFromWkt(geom.wkt))
-            lyr_obj.CreateFeature(feature)
-            feature = None        
+    for geom in geoms_iter:
+        feature = ogr.Feature(lyr_def)
+        feature.SetGeometry(ogr.CreateGeometryFromWkt(transform_geom(geom).wkt))
+        print(lyr_obj.CreateFeature(feature))
+        feature = None
     ds = None
 
 

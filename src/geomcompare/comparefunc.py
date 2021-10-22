@@ -11,6 +11,7 @@ dispatch_funcs = list()
 
 def dispatch_function(func):
     dispatch_funcs.append(func.__name__)
+    return func
 
 def geoms_always_match(gtest, gref):
     return True

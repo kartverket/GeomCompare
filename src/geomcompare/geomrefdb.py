@@ -450,7 +450,7 @@ class SQLiteGeomRefDB(GeomRefDB):
                     raise ValueError("'geoms_epsg' cannot be passed None "
                                      "if no default EPSG has been set!")
             cursor.execute(f"CREATE TABLE {geoms_tab_name} "
-                           "(rowid INTEGER PRIMARY KEY AUTOINCREMENT);")
+                           "(r_id INTEGER PRIMARY KEY AUTOINCREMENT);")
             cursor.execute(f"SELECT AddGeometryColumn ('{geoms_tab_name}', "
                            f"'geometry', {geoms_epsg}, '{geom_type}', 'XY', 1);")
             cursor.execute(f"SELECT CreateSpatialIndex('{geoms_tab_name}', 'geometry');")
