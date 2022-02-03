@@ -17,6 +17,7 @@ import shapely.ops
 from shapely import speedups
 import rtree
 import pyproj
+from pyproj.exceptions import CRSError
 
 from .geomrefdb_abc import GeomRefDB
 from .comparefunc import geoms_always_match

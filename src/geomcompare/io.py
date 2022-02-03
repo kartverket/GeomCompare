@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 
 import os
+#from collections import defaultdict
 from collections.abc import Sequence
 from numbers import Integral
 import itertools
 import sys
 import logging
 import inspect
+from typing import NamedTuple, Optional, TypeVar
 
 try:
     from osgeo import ogr, osr
@@ -16,12 +18,15 @@ except ImportError:
 from shapely import wkb
 from shapely.geometry import (LinearRing, LineString, MultiLineString,
                               MultiPoint, MultiPolygon, Point, Polygon)
+from shapely.geometry.base import BaseGeometry
 import psycopg2
 
 from .geomutils import geom_type_mapping, get_transform_func, unchanged_geom
 
 
-def setup_logger(name=None, level=logging.INFO, show_pid=False):
+def setup_logger(name: Optional[str] = None,
+                 level: int = logging.INFO,
+                 show_pid: bool = False) -> logging.Logger:
     """Setup the logging configuration for a Logger.
 
     Return a ready-configured logging.Logger instance which will write
@@ -31,7 +36,7 @@ def setup_logger(name=None, level=logging.INFO, show_pid=False):
     Keyword arguments:
 
     name: name of the logging.Logger instance to get. Default is the
-    filename where the calling function is defined.
+    filename where the function is called.
     level: logging level to set to the returned logging.Logger
     instance. Default is logging.INFO.
     show_pid: show the process ID in the log records. Default is
@@ -69,7 +74,10 @@ def setup_logger(name=None, level=logging.INFO, show_pid=False):
     return logger
 
 
-def update_logger(logger, **kwargs):
+def update_logger(logger: logging.Logger, **kwargs) -> None:
+    """Update the configuration of a logger.Logger instance.
+    
+    """
     level = kwargs.get("level", logger.getEffectiveLevel())
     if level is None:
         logger.disabled = True
@@ -97,39 +105,56 @@ def update_logger(logger, **kwargs):
     logger.setLevel(level)
 
 
-def fetch_geoms_from_pg(conn=None, host=None, dbname=None, user=None,
-                        password=None, port=None, sql_query=None, schema=None,
-                        table=None, column=None, aoi=None, aoi_epsg=None,
-                        output_epsg=None):
+class ConnectionParameters(NamedTuple):
+    host: str
+    dbname: str
+    user: str
+    password: str
+    port: int
+
+
+class SchemaTableColumn(NamedTuple):
+    schema: str
+    table: str
+    column: str
+
+def fetch_geoms_from_pg(conn: Optional[psycopg2.extensions.connection] = None,
+                        conn_params: Optional[ConnectionParameters] = None,
+                        geoms_col_loc: Optional[SchemaTableColumn] = None,
+                        sql_query: Optional[str] = None,
+                        aoi: Optional[BaseGeometry] = None,
+                        aoi_epsg: Optional[int] = None,
+                        output_epsg: Optional[int] = None):
     if conn is None:
-        for arg in ("host", "dbname", "user", "password", "port"):
-            if locals()[arg] is None:
-                raise ValueError(f"Argument {arg!r} must be passed a value "
-                                 "different from None!")        
-        conn = psycopg2.connect(host=host, dbname=dbname, user=user,
-                                password=password, port=port)
+        if conn_params is None:
+            raise ValueError("'conn' and 'conn_params' cannot both be "
+                             "passed None!")
+        conn = psycopg2.connect(**conn_params._asdict())
     cursor = conn.cursor()
     if sql_query is None:
-        for arg in ("schema", "table", "column"):
-            if locals()[arg] is None:
-                raise ValueError(f"Argument {arg!r} must be passed a value "
-                                 "different from None!")
+        if geoms_col_loc is None:
+            raise ValueError("'sql_query' and 'geoms_col_loc' cannot "
+                             "both be passed None!")            
         if aoi is not None or output_epsg is not None:
-            cursor.execute(f"SELECT Find_SRID('{schema}', '{table}', "
-                           f"'{column}');")
+            cursor.execute(f"SELECT Find_SRID('{geoms_col_loc.schema}', "
+                           f"'{geoms_col_loc.table}', "
+                           f"'{geoms_col_loc.column}');")
             pg_epsg = int(cursor.fetchone()[0])
-        where_filter = f"WHERE {column} IS NOT NULL"
+        where_filter = f"WHERE {geoms_col_loc.column} IS NOT NULL"
         if aoi is not None:
             if  aoi_epsg is not None and int(aoi_epsg) != pg_epsg:
                 transform_aoi = get_transform_func(aoi_epsg, pg_epsg)
                 aoi = transform_aoi(aoi)
-            spatial_filter = (f" AND ST_Intersects({column}, "
+            spatial_filter = (f" AND ST_Intersects({geoms_col_loc.column}, "
                               f"ST_GeomFromText('{aoi.wkt}', {pg_epsg}));")
         else:
             spatial_filter = ";"
         if output_epsg is not None and int(output_epsg) != pg_epsg:
-            column = f"ST_Transform({column}, {output_epsg})"
-        sql_query = (f"SELECT ST_AsBinary({column}) FROM {schema}.{table} "
+            geoms_col_loc = geoms_col_loc._replace(
+                column=(f"ST_Transform({geoms_col_loc.column}, "
+                        f"{output_epsg})"))
+        sql_query = (f"SELECT ST_AsBinary({geoms_col_loc.column}) "
+                     f"FROM {geoms_col_loc.schema}.{geoms_col_loc.table} "
                      f"{where_filter}{spatial_filter}")
     cursor.execute(sql_query)
     for row in cursor:
@@ -137,16 +162,39 @@ def fetch_geoms_from_pg(conn=None, host=None, dbname=None, user=None,
     conn = None    
 
 
-def _get_layer_epsg(layer):
+def _get_layer_epsg(layer: ogr.Layer):
     lyr_srs = layer.GetSpatialRef()
     if lyr_srs is not None and lyr_srs.AutoIdentifyEPSG() == 0:
         return int(lyr_srs.GetAuthorityCode(None))
     else:
         return None
-    
 
-def extract_geoms_from_file(filename, driver_name, layers=None, aoi=None,
-                            aoi_epsg=None, attr_filter=None, fids=None):
+
+## layer_filter  = namedtuple("LayerFilter", ["layer_name", "aoi", "aoi_epsg",
+##                                            "attr_filter", "fids"])
+
+## def get_layer_filter(layer_name=None, aoi=None, aoi_epsg=None, attr_filter=None,
+##                      fids=None):
+##     "filter without layer_name is a layer filter apllied to all layers"
+##     return layer_filter(**locals())
+
+LayerID = TypeVar("LayerID", str, int)
+
+Layers = Sequence[LayerID]
+
+class LayerFilter(NamedTuple):
+    layer_id: Optional[LayerID] = None
+    aoi: Optional[BaseGeometry] = None
+    aoi_epsg: Optional[int] = None
+    attr_filter: Optional[str] = None
+    fids: Optional[Sequence[int]] = None
+    
+Filters = Sequence[LayerFilter]
+
+def extract_geoms_from_file(filename: str,
+                            driver_name: str,
+                            layers: Optional[Layers] = None,
+                            layer_filters: Optional[Filters] = None):
     logger = setup_logger()
     try:
         from osgeo import ogr
@@ -168,44 +216,56 @@ def extract_geoms_from_file(filename, driver_name, layers=None, aoi=None,
                              "names/indices!")
     else:
         layers = range(ds.GetLayerCount())
-    ## for arg in ("aoi", "aoi_epsg", "attr_filter", "fids"):
+    filters_mapping = dict()
+    if layer_filters is not None:
+        for lf in layer_filters:
+            filters_mapping[lf.layer_id] = lf
+            
+    #####
+    ## lyr_mapping = defaultdict(dict)
+    ## for arg_name in ("aoi", "aoi_epsg", "attr_filter", "fids"):
     ##     try:
-    ##         if locals()[arg] is not None:
-    ##             locals()[arg] = dict(locals()[arg])
-    ##         else:
-    ##             locals()[arg] = dict()
-    ##             print(aoi is None)
+    ##         arg = locals()[arg_name]
+    ##         if arg is not None:
+    ##             lyr_mapping[arg] = dict(arg)
     ##     except (TypeError, ValueError):
     ##         logger.error(f"The argument {arg_name!r} must passed a mapping "
     ##                      f"of layer names and corresponding {arg_name!r} value.")
     ##         raise
-    if aoi is None:
-        aoi = dict()
-    if aoi_epsg is None:
-        aoi_epsg = dict()
-    if attr_filter is None:
-        attr_filter = dict()
-    if fids is None:
-        fids = dict()
+    ## if aoi is None:
+    ##     aoi = dict()
+    ## if aoi_epsg is None:
+    ##     aoi_epsg = dict()
+    ## if attr_filter is None:
+    ##     attr_filter = dict()
+    ## if fids is None:
+    ##     fids = dict()
 
 
     ############
     for lyr in layers:
         lyr_obj = ds.GetLayer(lyr)
-        lyr_aoi = aoi.get(lyr)
+        lyr_filter = filters_mapping.get(lyr, filters_mapping.get(None)) 
+        if lyr_filter is None:
+            lyr_aoi = None
+            lyr_aoi_epsg = None
+            lyr_attr_filter = None
+            lyr_fids = None
+        else:
+            lyr_aoi = lyr_filter.aoi
+            lyr_aoi_epsg = lyr_filter.aoi_epsg
+            lyr_attr_filter = lyr_filter.attr_filter
+            lyr_fids = lyr_filter.fids
         if lyr_aoi is not None:
-            lyr_aoi_epsg = aoi_epsg.get(lyr)
             if lyr_aoi_epsg is not None:
                 lyr_aoi_epsg = int(lyr_aoi_epsg)
                 lyr_epsg = _get_layer_epsg(lyr_obj)
                 if lyr_epsg is not None and lyr_epsg != lyr_aoi_epsg:
                     transform_aoi = get_transform_func(lyr_aoi_epsg, lyr_epsg)
                     lyr_aoi = transform_aoi(lyr_aoi)
-            lyr_obj = lyr_obj.SetSpatialFilter(ogr.CreateGeometryFromWkt(lyr_aoi.wkt))
-        lyr_attr_filter = attr_filter.get(lyr)
+            lyr_obj.SetSpatialFilter(ogr.CreateGeometryFromWkt(lyr_aoi.wkt))
         if lyr_attr_filter is not None:
-            lyr_obj = lyr_obj.SetAttributeFilter(lyr_attr_filter)
-        lyr_fids = fids.get(lyr)
+            lyr_obj.SetAttributeFilter(lyr_attr_filter)
         if lyr_aoi is None and lyr_attr_filter is None and lyr_fids is not None:
             for fid in lyr_fids:
                 feature = lyr_obj.GetFeature(fid)

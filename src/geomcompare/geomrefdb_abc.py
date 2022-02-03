@@ -40,22 +40,22 @@ class GeomRefDB(abc.ABC):
             geoms_iter = list(geoms_iter)
         try:
             tp_num = len(self.true_positives(geoms_iter,
-                                             geoms_EPSG,
-                                             same_geoms_func))
+                                             geoms_epsg=geoms_EPSG,
+                                             geoms_match=same_geoms_func))
         except TypeError:
             tp_num = sum(1 for _ in self.true_positives(geoms_iter,
-                                                        geoms_EPSG,
-                                                        same_geoms_func))
+                                                        geoms_epsg=geoms_EPSG,
+                                                        geoms_match=same_geoms_func))
         try:
             mg_num = len(self.missing_geometries(geoms_iter,
-                                                 AOI_geom,
-                                                 geoms_EPSG,
-                                                 same_geoms_func))
+                                                 aoi_geom=AOI_geom,
+                                                 geoms_epsg=geoms_EPSG,
+                                                 geoms_match=same_geoms_func))
         except TypeError:
             mg_num = sum(1 for _ in self.missing_geometries(geoms_iter,
-                                                            AOI_geom,
-                                                            geoms_EPSG,
-                                                            same_geoms_func))
+                                                            aoi_geom=AOI_geom,
+                                                            geoms_epsg=geoms_EPSG,
+                                                            geoms_match=same_geoms_func))
         return recall_score(tp_num, mg_num)
 
         
@@ -64,20 +64,20 @@ class GeomRefDB(abc.ABC):
             geoms_iter = list(geoms_iter)
         try:
             tp_num = len(self.true_positives(geoms_iter,
-                                             geoms_EPSG,
-                                             same_geoms_func))
+                                             geoms_epsg=geoms_EPSG,
+                                             geoms_match=same_geoms_func))
         except TypeError:
             tp_num = sum(1 for _ in self.true_positives(geoms_iter,
-                                                        geoms_EPSG,
-                                                        same_geoms_func))
+                                                        geoms_epsg=geoms_EPSG,
+                                                        geoms_match=same_geoms_func))
         try:
             fp_num = len(self.false_positives(geoms_iter,
-                                              geoms_EPSG,
-                                              same_geoms_func))
+                                              geoms_epsg=geoms_EPSG,
+                                              geoms_match=same_geoms_func))
         except TypeError:
             fp_num = sum(1 for _ in self.false_positives(geoms_iter,
-                                                         geoms_EPSG,
-                                                         same_geoms_func))            
+                                                         geoms_epsg=geoms_EPSG,
+                                                         geoms_match=same_geoms_func))            
         return precision_score(tp_num, fp_num)
 
 
@@ -87,30 +87,30 @@ class GeomRefDB(abc.ABC):
             geoms_iter = list(geoms_iter)
         try:
             tp_num = len(self.true_positives(geoms_iter,
-                                             geoms_EPSG,
-                                             same_geoms_func))
+                                             geoms_epsg=geoms_EPSG,
+                                             geoms_match=same_geoms_func))
         except TypeError:
             tp_num = sum(1 for _ in self.true_positives(geoms_iter,
-                                                        geoms_EPSG,
-                                                        same_geoms_func))
+                                                        geoms_epsg=geoms_EPSG,
+                                                        geoms_match=same_geoms_func))
         try:
             fp_num = len(self.false_positives(geoms_iter,
-                                              geoms_EPSG,
-                                              same_geoms_func))
+                                              geoms_epsg=geoms_EPSG,
+                                              geoms_match=same_geoms_func))
         except TypeError:
             fp_num = sum(1 for _ in self.false_positives(geoms_iter,
-                                                         geoms_EPSG,
-                                                         same_geoms_func))
+                                                         geoms_epsg=geoms_EPSG,
+                                                         geoms_match=same_geoms_func))
         try:
             mg_num = len(self.missing_geometries(geoms_iter,
-                                                 AOI_geom,
-                                                 geoms_EPSG,
-                                                 same_geoms_func))
+                                                 aoi_geom=AOI_geom,
+                                                 geoms_epsg=geoms_EPSG,
+                                                 geoms_match=same_geoms_func))
         except TypeError:
             mg_num = sum(1 for _ in self.missing_geometries(geoms_iter,
-                                                            AOI_geom,
-                                                            geoms_EPSG,
-                                                            same_geoms_func))
+                                                            aoi_geom=AOI_geom,
+                                                            geoms_epsg=geoms_EPSG,
+                                                            geoms_match=same_geoms_func))
             return f1_score(tp_num, fp_num, mg_num)
 
 
@@ -119,15 +119,15 @@ class GeomRefDB(abc.ABC):
             geoms_iter = list(geoms_iter)
         results = dict()
         results['true_positives'] = list(self.true_positives(geoms_iter,
-                                                            geoms_EPSG,
-                                                            same_geoms_func))
+                                                            geoms_epsg=geoms_EPSG,
+                                                            geoms_match=same_geoms_func))
         results['false_positives'] = list(self.false_positives(geoms_iter,
-                                                               geoms_EPSG,
-                                                               same_geoms_func))
-        results['missing_geometries'] = list(self.missing_geometriest(geoms_iter,
-                                                                      AOI_geom,
-                                                                      geoms_EPSG,
-                                                                      same_geoms_func))
+                                                               geoms_epsg=geoms_EPSG,
+                                                               geoms_match=same_geoms_func))
+        results['missing_geometries'] = list(self.missing_geometries(geoms_iter,
+                                                                      aoi_geom=AOI_geom,
+                                                                      geoms_epsg=geoms_EPSG,
+                                                                      geoms_match=same_geoms_func))
         tp_num = len(results['true_positives'])
         fp_num = len(results['false_positives'])
         mg_num = len(results['missing_geometries'])
