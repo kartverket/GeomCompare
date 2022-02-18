@@ -53,6 +53,7 @@ user need to install the following:
 * ``pyproj``
 * ``gdal`` (core libraries and Python bindings)
 * ``spatialite``
+
    .. note::
 
       ``mod_spatialite`` must be installed and accessible from ``sqlite3``:
