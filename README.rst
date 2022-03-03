@@ -36,9 +36,13 @@ sets. *GeomCompare* defines a few similarity functions, but it
 possible for the user to define its own customized similarity
 functions.
 
+.. _installation:
+
+Installation
+------------
 
 Requirements
-------------
+""""""""""""
 
 *GeomCompare* requires ``Python >= 3.9``.
 
@@ -65,9 +69,6 @@ user need to install the following:
 	 conn.enable_load_extension(True)
 	 conn.load_extension("mod_spatialite")
 
-
-Installation
-------------
 
 PIP
 """
