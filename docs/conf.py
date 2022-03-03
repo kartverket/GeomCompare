@@ -102,7 +102,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "geomcompare"
-copyright = "2021, Mathieu Tachon"
+copyright = "2021-2022, Mathieu Tachon, Kartverket"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
