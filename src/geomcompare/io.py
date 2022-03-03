@@ -7,7 +7,7 @@ import os
 import sys
 
 # from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Sequence, Generator
 from numbers import Integral
 from typing import Literal, NamedTuple, Optional, TypeVar
 

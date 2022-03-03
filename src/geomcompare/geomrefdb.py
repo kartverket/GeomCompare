@@ -10,18 +10,21 @@ import sqlite3
 import time
 import uuid
 from tempfile import NamedTemporaryFile
+from typing import Optional, Literal
+from collections.abc import Generator, Callable
 
 import psycopg2
 import pyproj
 import rtree
 import shapely.ops
+from shapely.geometry.base import BaseGeometry
 from pyproj.exceptions import CRSError
 from shapely import speedups, wkb
 
 from .comparefunc import geoms_always_match
 from .geomrefdb_abc import GeomRefDB
 from .geomutils import geom_type_mapping, get_transform_func, to_2D, unchanged_geom
-from .io import setup_logger, update_logger
+from .io import _setup_logger, _update_logger, GeometryIterable
 from .misc import SharedIterator, split_iter_to_lists
 
 
