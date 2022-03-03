@@ -60,7 +60,7 @@ class PostGISGeomRefDB(GeomRefDB):
         return int(res[0])
 
     def true_positives(self, geoms_iter, geoms_EPSG, same_geoms_func):
-        self.logger = setup_logger()
+        self.logger = _setup_logger()
         self.logger.info("Searching true positive geometries...")
         PG_geoms_EPSG = self.get_PG_geoms_EPSG()
         transform = PG_geoms_EPSG != int(geoms_EPSG)
@@ -93,7 +93,7 @@ class PostGISGeomRefDB(GeomRefDB):
         logger.info("Done searching true positive geometries.")
 
     def false_positives(self, geoms_iter, geoms_EPSG, same_geoms_func):
-        logger = setup_logger()
+        logger = _setup_logger()
         logger.info("Searching false positive geometries...")
         PG_geoms_EPSG = self.get_PG_geoms_EPSG()
         transform = PG_geoms_EPSG != int(geoms_EPSG)
@@ -129,7 +129,7 @@ class PostGISGeomRefDB(GeomRefDB):
         logger.info("Done searching false positive geometries.")
 
     def missing_geometries(self, geoms_iter, AOI_geom, geoms_EPSG, same_geoms_func):
-        logger = setup_logger()
+        logger = _setup_logger()
         logger.info("Searching missing geometries...")
         PG_geoms_EPSG = self.get_PG_geoms_EPSG()
         transform = PG_geoms_EPSG != int(geoms_EPSG)
@@ -179,7 +179,7 @@ class RtreeGeomRefDB(GeomRefDB):
         self.EPSG = geoms_EPSG
 
     def true_positives(self, geoms_iter, geoms_EPSG, same_geoms_func):
-        logger = setup_logger()
+        logger = _setup_logger()
         logger.info("Searching true positive geometries...")
         transform = geoms_EPSG != self.EPSG
         if transform:
@@ -205,7 +205,7 @@ class RtreeGeomRefDB(GeomRefDB):
         logger.info("Done searching true positive geometries.")
 
     def false_positives(self, geoms_iter, geoms_EPSG, same_geoms_func):
-        logger = setup_logger()
+        logger = _setup_logger()
         logger.info("Searching false positive geometries...")
         transform = geoms_EPSG != self.EPSG
         if transform:
@@ -243,7 +243,7 @@ class RtreeGeomRefDB(GeomRefDB):
                 yield el.object
 
     def missing_geometries(self, geoms_iter, AOI_geom, geoms_EPSG, same_geoms_func):
-        logger = setup_logger()
+        logger = _setup_logger()
         logger.info("Searching missing geometries...")
         index = rtree.index.Index()
         for i, geom in enumerate(geoms_iter):
@@ -335,7 +335,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         else:
             if logger_name is None:
                 logger_name = type(self).__name__
-            self.logger = setup_logger(name=logger_name, level=logging_level)
+            self._logger = _setup_logger(name=logger_name, level=logging_level)
 
         if db_path is not None and not os.path.isfile(db_path):
             new_db = True
@@ -413,9 +413,9 @@ class SQLiteGeomRefDB(GeomRefDB):
     def __getstate__(self):
         db_tf = NamedTemporaryFile(suffix=".db", delete=False)
         db_tf.close()
-        update_logger(self.logger, level=None)
+        _update_logger(self.logger, level=None)
         self.save_db(db_tf.name)
-        update_logger(self.logger, level=self.logger.getEffectiveLevel())
+        _update_logger(self.logger, level=self.logger.getEffectiveLevel())
         attrs = self.__dict__.copy()
         attrs["db_tf"] = db_tf.name
         attrs["conn"] = None
@@ -960,12 +960,12 @@ class SQLiteGeomRefDB(GeomRefDB):
         **method_kwargs,
     ):
         if logger_conf is None:
-            logger = setup_logger(name=str(uuid.uuid1()), level=None)
+            logger = _setup_logger(name=str(uuid.uuid1()), level=None)
         else:
             logger_conf["name"] = (
                 logger_conf.get("name", type(self).__name__) + f" (PID: {os.getpid()})"
             )
-            logger = setup_logger(**logger_conf)
+            logger = _setup_logger(**logger_conf)
         logger.info("Start worker function.")
         res = list(method_obj(geoms_iter, *method_args, **method_kwargs))
         n_geoms = len(res)

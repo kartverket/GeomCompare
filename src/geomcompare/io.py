@@ -33,7 +33,7 @@ from shapely.geometry.base import BaseGeometry
 from .geomutils import geom_type_mapping, get_transform_func, unchanged_geom
 
 
-def setup_logger(
+def _setup_logger(
     name: Optional[str] = None, level: int = logging.INFO, show_pid: bool = False
 ) -> logging.Logger:
     """Setup the logging configuration for a Logger.
@@ -83,7 +83,7 @@ def setup_logger(
     return logger
 
 
-def update_logger(logger: logging.Logger, **kwargs) -> None:
+def _update_logger(logger: logging.Logger, **kwargs) -> None:
     """Update the configuration of a logging.Logger instance.
 
 
@@ -94,7 +94,7 @@ def update_logger(logger: logging.Logger, **kwargs) -> None:
     Keyword arguments:
 
     Configuration parameters of the logging.Logger instance to update,
-    such as "level" or "show_pid". See function "setup_logger".
+    such as "level" or "show_pid". See function "_setup_logger".
     """
     level = kwargs.get("level", logger.getEffectiveLevel())
     if level is None:
@@ -317,7 +317,7 @@ def extract_geoms_from_file(
     "LayerFilter" class) to apply to the layer(s) when extracting the
     geometrical features.
     """
-    logger = setup_logger()
+    logger = _setup_logger()
     try:
         from osgeo import ogr
 
@@ -431,7 +431,7 @@ def write_geoms_to_file(
     any file at the path set to the "filename" parameter, and will
     create a new file at this same location.
     """
-    logger = setup_logger()
+    logger = _setup_logger()
     try:
         from osgeo import ogr, osr
 
