@@ -1439,7 +1439,7 @@ class SQLiteGeomRefDB(GeomRefDB):
                     target=self._wrap_method_return,
                     args=[
                         method_obj,
-                        geoms_iters[i],
+                        iterables[i],
                         shared_results_iter,
                         nprocs_done,
                         *method_args,
@@ -1460,7 +1460,7 @@ class SQLiteGeomRefDB(GeomRefDB):
             for p in procs:
                 p.terminate()
                 p.join()
-            del geoms_iters
+            del iterables
             raise
         else:
             return shared_results_iter
@@ -1468,7 +1468,7 @@ class SQLiteGeomRefDB(GeomRefDB):
     def _wrap_method_return(
         self,
         method_obj,
-        geoms_iter,
+        iterable,
         shared_results_iter,
         nprocs_done,
         *method_args,
@@ -1487,7 +1487,7 @@ class SQLiteGeomRefDB(GeomRefDB):
             )
             logger = _setup_logger(**logger_conf)
         logger.info("Start worker function.")
-        res = list(method_obj(geoms_iter, *method_args, **method_kwargs))
+        res = list(method_obj(iterable, *method_args, **method_kwargs))
         n_geoms = len(res)
         if n_geoms > 1:
             logger.info(f"{n_geoms} geometries found.")
