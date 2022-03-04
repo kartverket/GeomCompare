@@ -710,6 +710,10 @@ class SQLiteGeomRefDB(GeomRefDB):
             tab[0]: {"geom_type": geom_type_mapping[tab[2]], "srid": tab[4]}
             for tab in cursor.fetchall()
         }
+        if count_features:
+            for tab in info.keys():
+                cursor.execute(f"SELECT COUNT(*) FROM {tab};")
+                info[tab]["count"] = cursor.fetchone()[0]
         if not to_stdout:
             return info
         elif not info:
@@ -721,12 +725,23 @@ class SQLiteGeomRefDB(GeomRefDB):
             f2_width = max(max(len(info[k]["geom_type"]) for k in info.keys()), len(f2))
             f3 = "EPSG"
             f3_width = max(max(len(str(info[k]["srid"])) for k in info.keys()), len(f3))
-            line_tmp = f"{{:<{f1_width}}} | {{:<{f2_width}}} | {{:>{f3_width}}}\n"
-            head = line_tmp.format(f1, f2, f3)
+            line_tmp = f"{{f1:<{f1_width}}} | {{f2:<{f2_width}}} | {{f3:>{f3_width}}}"
+            if count_features:
+                f4 = "COUNT"
+                f4_width = max(max(len(str(info[k]["count"])) for k in info.keys()), len(f4))
+                line_tmp += f" | {{f4:>{f4_width}}}"
+            line_tmp += "\n"
+            head = line_tmp.format(**locals())
             line_width = len(head) - 1
             table = f"\n{head}{'-' * line_width}\n"
-            for k, v in info.items():
-                table += line_tmp.format(k, v["geom_type"], str(v["srid"]))
+            if count_features:
+                for k, v in info.items():
+                    table += line_tmp.format(
+                        f1=k, f2=v["geom_type"], f3=str(v["srid"]), f4=str(v["count"])
+                    )
+            else:
+                for k, v in info.items():
+                    table += line_tmp.format(f1=k, f2=v["geom_type"], f3=str(v["srid"]))
             print(table)
 
     @staticmethod
