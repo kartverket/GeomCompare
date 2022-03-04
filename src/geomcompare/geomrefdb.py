@@ -366,7 +366,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         if filename is not None:
             self._filename = os.path.abspath(filename)
         else:
-            self.db_path = None
+            self._filename = None
         if default_epsg is not None:
             try:
                 default_epsg = int(default_epsg)
@@ -374,61 +374,61 @@ class SQLiteGeomRefDB(GeomRefDB):
             except (CRSError, ValueError, TypeError):
                 raise ValueError("{!r} ('default_epsg') is not a valid EPSG code!")
             else:
-                self.default_epsg = default_epsg
+                self._default_epsg = default_epsg
         else:
-            self.default_epsg = None
-        self.in_ram = in_ram
+            self._default_epsg = None
+        self._in_ram = in_ram
         if logger is not None:
-            self.logger = logger
+            self._logger = logger
         else:
             if logger_name is None:
                 logger_name = type(self).__name__
             self._logger = _setup_logger(name=logger_name, level=logging_level)
 
-        if db_path is not None and not os.path.isfile(db_path):
+        if filename is not None and not os.path.isfile(filename):
             new_db = True
         else:
             new_db = False
-        if db_path is None:
+        if filename is None:
             if not in_ram:
                 raise ValueError(
-                    "The 'db_path' and 'in_ram' parameters cannot both be None!"
+                    "The 'filename' cannot be set to None if 'in_ram' is set to False!"
                 )
             else:
-                self.conn = sqlite3.connect(":memory:")
-                self.conn.enable_load_extension(True)
-                self.conn.load_extension("mod_spatialite")
-                cursor = self.conn.cursor()
+                self._conn = sqlite3.connect(":memory:")
+                self._conn.enable_load_extension(True)
+                self._conn.load_extension("mod_spatialite")
+                cursor = self._conn.cursor()
                 cursor.execute("SELECT InitSpatialMetaData();")
-                self.conn.commit()
-                self.logger.info("New database created in RAM.")
+                self._conn.commit()
+                self._logger.info("New database created in RAM.")
         elif in_ram:
-            self.conn = sqlite3.connect(":memory:")
-            self.conn.enable_load_extension(True)
-            self.conn.load_extension("mod_spatialite")
+            self._conn = sqlite3.connect(":memory:")
+            self._conn.enable_load_extension(True)
+            self._conn.load_extension("mod_spatialite")
             if not new_db:
-                disk_conn = sqlite3.connect(db_path)
-                disk_conn.backup(self.conn)
+                disk_conn = sqlite3.connect(filename)
+                disk_conn.backup(self._conn)
                 disk_conn.close()
-                self.logger.info(
-                    f"Database file {db_path!r} successfully loaded in RAM."
+                self._logger.info(
+                    f"Database file {filename!r} successfully loaded in RAM."
                 )
             else:
                 cursor = conn.cursor()
                 cursor.execute("SELECT InitSpatialMetaData();")
-                self.conn.commit()
-                self.logger.info(
+                self._conn.commit()
+                self._logger.info(
                     f"File {dp_path!r} does not exist, new database created in RAM."
                 )
         else:
-            self.conn = sqlite3.connect(db_path)
-            self.conn.enable_load_extension(True)
-            self.conn.load_extension("mod_spatialite")
+            self._conn = sqlite3.connect(filename)
+            self._conn.enable_load_extension(True)
+            self._conn.load_extension("mod_spatialite")
             if new_db:
                 cursor = conn.cursor()
                 cursor.execute("SELECT InitSpatialMetaData();")
-                self.conn.commit()
-                self.logger.info(f"New database created at {db_path!r}.")
+                self._conn.commit()
+                self._logger.info(f"New database created at {filename!r}.")
         if geoms_iter is not None:
             try:
                 self.add_geometries(
@@ -439,16 +439,64 @@ class SQLiteGeomRefDB(GeomRefDB):
                 )
             except Exception:
                 if new_db and not in_ram:
-                    self.logger.error(
+                    self._logger.error(
                         "An error occurred while adding geometries to the database, "
-                        f"deleting file {db_path!r}..."
+                        f"deleting file {filename!r}..."
                     )
-                    os.remove(db_path)
+                    os.remove(filename)
                 else:
-                    self.logger.error(
+                    self._logger.error(
                         "An error occurred while adding geometries to the database..."
                     )
                 raise
+
+    @classmethod
+    @property
+    def supported_geom_types(cls) -> list[SUPPORTED_GEOM_TYPE]:
+        """`list` of supported geometry types: Types supported by the
+        :py:class:`SQLiteGeomRefDB`.
+        """
+        return [
+            "Point",
+            "LineString",
+            "Polygon",
+            "MultiPoint",
+            "MultiLineString",
+            "MultiPolygon",
+            "GeometryCollection",
+        ]
+
+    @property
+    def filename(self) -> Optional[str]:
+        """Path of the opened database file. The attribute is set to
+        `None` if a new database was created in RAM for this instance.
+        """
+        return self._filename
+
+    @property
+    def in_ram(self) -> bool:
+        """``True`` if the database is created/loaded in RAM. ``False``
+        if the instance is connected to database file on disk.
+        """
+        return self._in_ram
+
+    @property
+    def default_epsg(self) -> int:
+        """Default EPSG code of the geometrical/geographical features
+        that are added to the database.
+        """
+        return self._default_epsg
+
+    @default_epsg.setter
+    def default_epsg(self, value: int) -> None:
+        self.logger.info(f"The 'default_epsg' is now set to {default_epsg}.")
+        self._default_epsg = value
+
+    @property
+    def logger(self) -> logging.Logger:
+        """Ready configured Logger instance used for logging outputs.
+        """
+        return self._logger
 
     def __del__(self):
         """Close the connection to the SQLite database and do some
@@ -471,7 +519,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         _update_logger(self.logger, level=self.logger.getEffectiveLevel())
         attrs = self.__dict__.copy()
         attrs["db_tf"] = db_tf.name
-        attrs["conn"] = None
+        attrs["_conn"] = None
         return attrs
 
     def __setstate__(self, state):
@@ -480,8 +528,8 @@ class SQLiteGeomRefDB(GeomRefDB):
         self.__dict__ = state
         if self.in_ram:
             disk_conn = sqlite3.connect(self.db_tf)
-            self.conn = sqlite3.connect(":memory:")
-            disk_conn.backup(self.conn)
+            self._conn = sqlite3.connect(":memory:")
+            disk_conn.backup(self._conn)
             disk_conn.close()
         else:
             self._conn = sqlite3.connect(self.db_tf)
@@ -516,15 +564,15 @@ class SQLiteGeomRefDB(GeomRefDB):
         """
         if os.path.isfile(filename):
             if overwrite:
-                self.logger.info(f"File {path!r} already exists. Removing file...")
-                os.remove(path)
+                self.logger.info(f"File {filename!r} already exists. Removing file...")
+                os.remove(filename)
             else:
                 self.logger.info(
-                    f"File {path!r} already exists. Saving database aborted."
+                    f"File {filename!r} already exists. Saving database aborted."
                 )
                 return
-        disk_conn = sqlite3.connect(path)
-        self.conn.backup(disk_conn)
+        disk_conn = sqlite3.connect(filename)
+        self._conn.backup(disk_conn)
         disk_conn.close()
         self.logger.info("Database was saved successfully.")
 
@@ -602,7 +650,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         ## Coordinates of input geometries are not transformed by
         ## default. Return the input geometry unchanged.
         transform_geom = unchanged_geom
-        cursor = self.conn.cursor()
+        cursor = self._conn.cursor()
         if geom_type is not None and not geom_type in self.supported_geom_types:
             raise ValueError(
                 f"{geom_type!r} is not a valid value for the 'geom_type' argument! "
@@ -626,9 +674,9 @@ class SQLiteGeomRefDB(GeomRefDB):
         if new_tab:
             if geom_type is None:
                 raise ValueError(
-                    "'geom_type' cannot be passed None for new databases, or if no "
-                    "existing geometry table name ('geoms_tab_name') was passed as "
-                    "parameter!"
+                    "'geom_type' cannot be passed None for new databases/tables, "
+                    "or if no existing geometry table name ('geoms_tab_name') "
+                    "was passed as parameter!"
                 )
             if geoms_epsg is None:
                 if self.default_epsg is not None:
@@ -649,7 +697,7 @@ class SQLiteGeomRefDB(GeomRefDB):
             cursor.execute(
                 f"SELECT CreateSpatialIndex('{geoms_tab_name}', 'geometry');"
             )
-            self.conn.commit()
+            self._conn.commit()
 
         else:  # if existing table
             if geom_type is not None and geom_type != tab_info["geom_type"]:
@@ -1313,8 +1361,11 @@ class SQLiteGeomRefDB(GeomRefDB):
             geoms_epsg=geoms_epsg,
             **logger_conf,
         )
-        query = self._get_spatial_query(only_within_aoi=aoi_geom is not None)
-        cursor = self.conn.cursor()
+        query = self._get_spatial_query(
+            spatial_index=aoi_geom is not None,
+            only_within_aoi=aoi_geom is not None,
+        )
+        cursor = self._conn.cursor()
         cursor.execute(query.format(**query_kwargs))
         geoms_iter = (wkb.loads(row[0]) for row in cursor)
         if ncores is not None:
