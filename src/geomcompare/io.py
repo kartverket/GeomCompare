@@ -525,9 +525,12 @@ def write_geoms_to_file(
             f"{inspect.stack()[0].function!r}!"
         )
     driver = ogr.GetDriverByName(driver_name)
-    geoms_epsg = int(geoms_epsg)
-    srs = osr.SpatialReference()
-    srs.ImportFromEPSG(geoms_epsg)
+    if geoms_epsg is not None:
+        geoms_epsg = int(geoms_epsg)
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(geoms_epsg)
+    else:
+        srs = None
     geoms_iter = iter(geoms_iter)
     #    geoms_list = iter(geoms_iter)
     #    if not len(set(g.__class__ for g in geoms_list)) == 1:
@@ -555,7 +558,7 @@ def _update_geoms_file(
     ds = driver.Open(filename, 1)
     if ds is None:
         _write_geoms_file(
-            geoms_iter, geom_type, srs, filename, driver, layer_name, logger
+            geoms_iter, geom_type, srs, filename, driver, layer, logger
         )
         return
     if layer is not None:
@@ -572,7 +575,7 @@ def _update_geoms_file(
     else:
         lyr_def = lyr_obj.GetLayerDefn()
         lyr_epsg = _get_layer_epsg(lyr_obj)
-        if lyr_epsg is not None and lyr_epsg != geoms_epsg:
+        if geoms_epsg is not None and lyr_epsg is not None and lyr_epsg != geoms_epsg:
             logger.info(
                 f"The spatial reference system of the output file {filename!r}, "
                 f"layer {layer!r}, is different from that of the input geometry "
@@ -588,8 +591,9 @@ def _update_geoms_file(
             )
     for geom in geoms_iter:
         feature = ogr.Feature(lyr_def)
-        feature.SetGeometry(ogr.CreateGeometryFromWkt(transform_geom(geom).wkt))
-        print(lyr_obj.CreateFeature(feature))
+        geom = transform_geom(geom)
+        feature.SetGeometry(ogr.CreateGeometryFromWkt(geom.wkt))
+        lyr_obj.CreateFeature(feature)
         feature = None
     ds = None
 
