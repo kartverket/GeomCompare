@@ -288,7 +288,7 @@ def fetch_geoms_from_pg(
         conn = None
 
 
-def _get_layer_epsg(layer):
+def _get_layer_epsg(layer) -> Optional[int]:
     """Extract and return the EPSG code of an ogr.Layer. Return None
     if not found.
     """
@@ -357,9 +357,9 @@ class LayerFilter(NamedTuple):
 def extract_geoms_from_file(
     filename: str,
     driver_name: str,
-    layers: Optional[Layers] = None,
-    layer_filters: Optional[Filters] = None,
-):
+    layers: Optional[Sequence[LayerID]] = None,
+    layer_filters: Optional[Sequence[LayerFilter]] = None,
+) -> Generator[BaseGeometry]:
     """Extract geometrical features from a GDAL/OGR-readable file.
 
     Generator function which opens a file located on disk, with one of the

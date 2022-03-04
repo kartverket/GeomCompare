@@ -276,6 +276,16 @@ class RtreeGeomRefDB(GeomRefDB):
                     yield ref_geom
         logger.info("Done searching missing geometries.")
 
+#: Geometry types supported by the :py:class:`SQLiteGeomRefDB` class.
+SUPPORTED_GEOM_TYPE = Literal[
+    "Point",
+    "LineString",
+    "Polygon",
+    "MultiPoint",
+    "MultiLineString",
+    "MultiPolygon",
+    "GeometryCollection",
+]
 
 class SQLiteGeomRefDB(GeomRefDB):
     """Concrete implementation of the GeomRefDB ABC using SQLite.
@@ -342,19 +352,19 @@ class SQLiteGeomRefDB(GeomRefDB):
 
     def __init__(
         self,
-        db_path=None,
-        default_epsg=None,
-        geoms_iter=None,
-        geoms_tab_name=None,
-        geom_type=None,
-        geoms_epsg=None,
-        in_ram=True,
-        logger=None,
-        logger_name=None,
-        logging_level=logging.INFO,
-    ):
-        if db_path is not None:
-            self.db_path = os.path.abspath(db_path)
+        filename: Optional[str] = None,
+        default_epsg: Optional[int] = None,
+        geoms_iter: Optional[GeometryIterable] = None,
+        geoms_tab_name: Optional[str] = None,
+        geom_type: Optional[SUPPORTED_GEOM_TYPE] = None,
+        geoms_epsg: Optional[int] = None,
+        in_ram: bool = True,
+        logger: Optional[logging.Logger] = None,
+        logger_name: Optional[str] = None,
+        logging_level: int = logging.INFO,
+    ) -> None:
+        if filename is not None:
+            self._filename = os.path.abspath(filename)
         else:
             self.db_path = None
         if default_epsg is not None:
@@ -519,7 +529,11 @@ class SQLiteGeomRefDB(GeomRefDB):
         self.logger.info("Database was saved successfully.")
 
     def add_geometries(
-        self, geoms_iter, geom_type=None, geoms_epsg=None, geoms_tab_name=None
+        self,
+        geoms_iter: GeometryIterable,
+        geom_type: Optional[SUPPORTED_GEOM_TYPE] = None,
+        geoms_epsg: Optional[int] = None,
+        geoms_tab_name: Optional[str] = None,
     ):
         """Add geometrical features to the internal SQLite database.
 
@@ -677,7 +691,7 @@ class SQLiteGeomRefDB(GeomRefDB):
             If set to ``True``, the function will also return the number of
             features/rows per table. If set to ``False``, the features will
             not be counted.
-        
+
         Returns
         -------
         `dict` or `None`
@@ -747,7 +761,7 @@ class SQLiteGeomRefDB(GeomRefDB):
             of interest*. If set to ``False``, the created template may not
             filter out features based on a *area of interest* (depending on
             the value passed to the ``only_within_aoi`` parameter).
-            
+
         Returns
         -------
         ``str``
@@ -990,7 +1004,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         geoms_match: Callable[[BaseGeometry, BaseGeometry], bool] = None,
         get_search_frame: Callable[[BaseGeometry], BaseGeometry] = None,
         ncores: Optional[int] = None,
-    ) -> Generator[BaseGeometry]:  # , **kwargs):        
+    ) -> Generator[BaseGeometry]:  # , **kwargs):
         """Identify *non-matching* **input** geometries.
 
         The function takes as input geometrical/geographical features, and
@@ -1150,7 +1164,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         geoms_tab_name: Optional[str] = None,
         geoms_match: Callable[[BaseGeometry, BaseGeometry], bool] = None,
         get_search_frame: Callable[[BaseGeometry], BaseGeometry] = None,
-        ncores: Optional[int] = None,      
+        ncores: Optional[int] = None,
     ) -> Generator[BaseGeometry]:  # , **kwargs):
         """Identify (missing) *non-matching* **reference** geometries.
 
