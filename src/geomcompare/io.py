@@ -7,7 +7,7 @@ import os
 import sys
 
 # from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Sequence, Generator
 from numbers import Integral
 from typing import Literal, NamedTuple, Optional, TypeVar
 
@@ -33,7 +33,7 @@ from shapely.geometry.base import BaseGeometry
 from .geomutils import geom_type_mapping, get_transform_func, unchanged_geom
 
 
-def setup_logger(
+def _setup_logger(
     name: Optional[str] = None, level: int = logging.INFO, show_pid: bool = False
 ) -> logging.Logger:
     """Setup the logging configuration for a Logger.
@@ -41,15 +41,20 @@ def setup_logger(
     Return a ready-configured logging.Logger instance which will write
     to 'stdout'.
 
+    Parameters
+    ----------
+    name : `str`, optional
+        Name of the logging.Logger instance to get. Default is the filename
+        where the function is called.
+    level : `int`, default: ``logging.INFO``
+        Logging level to set to the returned logging.Logger instance.
+    show_pid : `bool`, default: ``False``
+        Show the process ID in the log records.
 
-    Keyword arguments:
-
-    name: name of the logging.Logger instance to get. Default is the
-    filename where the function is called.
-    level: logging level to set to the returned logging.Logger
-    instance. Default is logging.INFO.
-    show_pid: show the process ID in the log records. Default is
-    False.
+    Returns
+    -------
+    `logging.Logger`
+        Ready-configured Logger
     """
     if name is None:
         name = os.path.basename(inspect.stack()[1].filename)
@@ -83,18 +88,18 @@ def setup_logger(
     return logger
 
 
-def update_logger(logger: logging.Logger, **kwargs) -> None:
+def _update_logger(logger: logging.Logger, **kwargs) -> None:
     """Update the configuration of a logging.Logger instance.
 
-
-    Positional arguments:
-
-    logger: logging.Logger instance to be updated.
+    Parameters
+    ----------
+    logger : logging.Logger
+        Logger instance to be updated.
 
     Keyword arguments:
 
     Configuration parameters of the logging.Logger instance to update,
-    such as "level" or "show_pid". See function "setup_logger".
+    such as "level" or "show_pid". See function "_setup_logger".
     """
     level = kwargs.get("level", logger.getEffectiveLevel())
     if level is None:
@@ -124,20 +129,58 @@ def update_logger(logger: logging.Logger, **kwargs) -> None:
 
 
 class ConnectionParameters(NamedTuple):
-    """Parameters to open a connection to a PostGIS database."""
+    """Parameters to open a connection to a PostGIS database.
 
+    Instances of this class are intended to be used as parameter for
+    the :py:func:`fetch_geoms_from_pg` function.
+
+    Attributes
+    ----------
+    .. host : `str`
+           Database host address.
+    .. dbname : `str`
+           Database name.
+    .. user : `str`
+           User name used to authenticate.
+    .. password : `str`
+           Password used to authenticate.
+    .. port : `int`, default: ``5432``
+           Connection port number.
+    """
+    #: Database host address.
     host: str
+    #: Database name.
     dbname: str
+    #: User name used to authenticate.
     user: str
+    #: Password used to authenticate.
     password: str
-    port: int
+    #: Connection port number.
+    port: int = 5432
 
 
 class SchemaTableColumn(NamedTuple):
-    """Location of a geometry column in a PostGIS database."""
+    """Location of a geometry column in a PostGIS database.
 
+    Instances of this class are intended to be used as parameter for
+    the :py:func:`fetch_geoms_from_pg` function.
+
+    Attributes
+    ----------
+    .. schema : `str`
+           Schema name of the PostGIS database, where the table
+           containing the geometrical features is located.
+    .. table : `str`
+           Table name, where the geometrical features can be found.
+    .. column : `str`
+           Column name, where the geometrical features can be found.
+    """
+    #: Schema name of the PostGIS database, where the table containing
+    #: the geometrical features is located.
     schema: str
+    #: Table name, where the geometrical features can be found.
     table: str
+    #: Column name, where the geometrical features can be found.
     column: str
 
 
@@ -149,39 +192,54 @@ def fetch_geoms_from_pg(
     aoi: Optional[BaseGeometry] = None,
     aoi_epsg: Optional[int] = None,
     output_epsg: Optional[int] = None,
-):
+) -> Generator[BaseGeometry]:
     """Fetch geometrical features from a PostGIS database.
 
-    Generator function which connects or uses an existing connection
-    to a PostGIS database, and yields geometrical features from
-    specified geometry column (within a given area or not), or based
-    on a user-defined SQL query. If the connection to the database is
-    opened by the function, it will be closed automatically after the
-    last geometrical feature is yielded.
+    Generator function which connects or uses an existing connection to a
+    PostGIS database, and yields geometrical features from specified
+    geometry column (within a given area or not), or based on a
+    user-defined SQL query. If the connection to the database is opened by
+    the function, it will be closed automatically after the last
+    geometrical feature is yielded.
 
+    Parameters
+    ----------
+    conn : `psycopg2.extensions.connection`, optional
+        Pre-opened connection to the PostGIS database.
+    conn_params : `ConnectionParameters`, optional
+        Parameters to open a connection to the PostGIS database.
+    sql_query : `str`, optional
+        SQL query to use to extract geometrical features from the PostGIS database.
+    geoms_col_loc : `SchemaTableColumn`, optional
+        Geometry column location within the PostGIS database.
+    aoi : `shapely.geometry.base.BaseGeometry`, optional
+        *Area of interest*, where the geometrical features lies.
+    aoi_epsg : `int`, optional
+        EPSG code of the *area of interest* geometry/ies.
+    output_epsg : `int`, optional
+        EPSG code of the yielded geometrical features. This parameter can
+        be used to reproject the yielded geometries to a different Spatial
+        Reference System from the one used in the PostGIS database.
 
-    Keyword parameters:
+    Yields
+    ------
+    shapely.geometry.base.BaseGeometry
+        Geometrical/Geographical features from the PostGIS database.
 
-    conn: pre-opened connection to the PostGIS database
-    ("psycopg2.extensions.connection" instance). Default is None.
-    conn_params: connection parameters ("ConnectionParameters"
-    instance) to open a connection to the PostGIS database. Default is
-    None.
-    sql_query: SQL query to use to extract geometrical features from
-    the PostGIS database. Note that if this parameter is specified by
-    the user, it will override and ignore all other keyword parameters
-    except from "conn" and "conn_params". Default is None.
-    geoms_col_loc: geometry column location ("SchemaTableColumn"
-    instance) within the PostGIS database. Default is None.
-    aoi: area of interest, where the geometrical features lies. This
-    area must be defined by an instance of the
-    "shapely.geometry.base.BaseGeometry" class. Default is None.
-    aoi_epsg: EPSG code of the area of interest geometry/ies. Default
-    is None.
-    output_epsg: EPSG code of the yielded geometrical features. This
-    parameter can be used to transform the yielded geometries to a
-    different Spatial Reference System from the one used in the
-    PostGIS database. Default is None.
+    Raises
+    ------
+    ValueError
+        If both ``conn`` and ``conn_params`` parameters are not passed
+        an argument different from `None`.
+    ValueError
+        If both ``sql_query`` and ``geoms_col_loc`` parameters are not
+        passed an argument different from `None`.
+
+    Notes
+    -----
+    In the case where the ``sql_query`` parameter is given, the parameters
+    ``geoms_col_loc``, ``aoi``, ``aoi_epsg`` and ``output_epsg`` will be
+    ignored, as SQL queries can include filtering and reprojection.
     """
     if conn is None:
         if conn_params is None:
@@ -230,7 +288,7 @@ def fetch_geoms_from_pg(
         conn = None
 
 
-def _get_layer_epsg(layer):
+def _get_layer_epsg(layer) -> Optional[int]:
     """Extract and return the EPSG code of an ogr.Layer. Return None
     if not found.
     """
@@ -241,83 +299,101 @@ def _get_layer_epsg(layer):
         return None
 
 
-## Type for identifying layers.
+#: Type for identifying layers.
 LayerID = TypeVar("LayerID", str, int)
-
-## Type for specifing a sequence of layers.
-Layers = Sequence[LayerID]
 
 
 class LayerFilter(NamedTuple):
     """Filter for extraction of geometrical features from file.
 
     Instances of this class are intended to be used as parameter for
-    the "extract_geoms_from_file" function, for filtering and choosing
-    the geometrical features to extract.
+    the :py:func:`extract_geoms_from_file` function, for filtering and
+    choosing the geometrical features to extract.
 
-    Attributes:
-
-    layer_id: LayerID type to identify which layer the filter will be
-    applied to. If set to None (default), the filter will be applied
-    on all layers.
-    aoi: area of interest, where the geometrical features lies. All
-    features lying outside the area of interest will be filtered out
-    (not extracted). This area must be defined by an instance of the
-    "shapely.geometry.base.BaseGeometry" class. Default is None.
-    aoi_epsg: EPSG code of the area of interest geometry/ies. Default
-    is None (the same Spatial Reference System as the layer will be
-    used).
-    attr_filter: valid string representation of an attribute filter
-    (e.g. "attr_name = 'value'"). Default is None.
-    fids: IDs of the features to extract from the layer. This
-    parameter will be ignored if either the "aoi" or the "attr_filter"
-    parameters are specified by the user.
+    Attributes
+    ----------
+    .. layer_id : `LayerID`, optional
+           Name or index of the layer the filter will be applied to. If set
+           to `None`, the filter will be applied on all layers.
+    .. aoi : `shapely.geometry.base.BaseGeometry`, optional
+           *Area of interest*, where the geometrical features lies. All
+           features lying outside the *area of interest* will be filtered
+           out (not extracted).
+    .. aoi_epsg : `int`, optional
+           EPSG code of the *area of interest* geometry/ies. If set to
+           `None`, the same Spatial Reference System as the layer will be
+           used.
+    .. attr_filter : `str`, optional
+           Valid string representation of an attribute filter
+           (e.g. ``"attr_name = 'value'"``).
+    .. fids : sequence of `int`, optional
+           IDs of the features to extract from the layer. This parameter
+           will be ignored if either the ``aoi`` or the ``attr_filter``
+           parameters are specified by the user.
     """
-
+    #: Name or index of the layer the filter will be applied to. If set to
+    #: `None`, the filter will be applied on all layers.
     layer_id: Optional[LayerID] = None
+
+    #: shapely.geometry.base.BaseGeometry, optional: *Area of interest*,
+    #: where the geometrical features lies. All features lying outside
+    #: the *area of interest* will be filtered out (not extracted).
     aoi: Optional[BaseGeometry] = None
+
+    #: EPSG code of the *area of interest* geometry/ies. If set to `None`,
+    #: the same Spatial Reference System as the layer will be used.
     aoi_epsg: Optional[int] = None
+
+    #: Valid string representation of an attribute filter
+    #: (e.g. ``"attr_name = 'value'"``).
     attr_filter: Optional[str] = None
+
+    #: IDs of the features to extract from the layer. This parameter will
+    #: be ignored if either the ``aoi`` or the ``attr_filter`` parameters
+    #: are specified by the user.
     fids: Optional[Sequence[int]] = None
-
-
-## Type for specifying a sequence of LayerFilter instances.
-Filters = Sequence[LayerFilter]
 
 
 def extract_geoms_from_file(
     filename: str,
     driver_name: str,
-    layers: Optional[Layers] = None,
-    layer_filters: Optional[Filters] = None,
-):
+    layers: Optional[Sequence[LayerID]] = None,
+    layer_filters: Optional[Sequence[LayerFilter]] = None,
+) -> Generator[BaseGeometry]:
     """Extract geometrical features from a GDAL/OGR-readable file.
 
-    Generator function which opens a file located on disk, with one of
-    the existing GDAL/OGR drivers, and yields geometrical features,
-    from one or several layers. The function also permits the use of
-    filters to allow for fine-grained extraction of the geometrical
+    Generator function which opens a file located on disk, with one of the
+    existing `GDAL/OGR drivers
+    <https://gdal.org/drivers/vector/index.html>`_, and yields geometrical
+    features, from one or several layers. The function also permits the use
+    of filters to allow for fine-grained extraction of the geometrical
     features.
 
+    Parameters
+    ----------
+    filename : `str`
+        Path to the file to extract the geometrical features from.
+    driver_name : str
+        Name of the GDAL/OGR driver to use for opening the file.
+    layers : sequence of `LayerID`, optional
+        Layers from which the geometrical features will be extracted. If
+        set to `None` (default), geometrical features will be extracted
+        from all layers.
+    layer_filters: sequence of `LayerFilter`, optional
+        Filters to apply to the layer(s) when extracting the geometrical
+        features.
 
-    Positional parameters:
+    Yields
+    ------
+    `shapely.geometry.base.BaseGeometry`
+        Geometrical/Geographical features from the file.
 
-    filename: path to the file to extract the geometrical features from.
-    driver_name: name of the GDAL/OGR driver to use for opening the
-    file. See https://gdal.org/drivers/vector/index.html for a list of
-    the supported drivers.
-
-    Keyword parameters:
-
-    layers: Layers type to specify a sequence of layers (identified by
-    the "LayerID" type) from which the geometrical features will be
-    extracted. Default is None (geometrical features will be extracted
-    from all layers).
-    layer_filters: Filters type to specify a sequence of filters (see
-    "LayerFilter" class) to apply to the layer(s) when extracting the
-    geometrical features.
+    Raises
+    ------
+    NotImplementedError
+        If GDAL/OGR is not installed or not importable.
     """
-    logger = setup_logger()
+    logger = _setup_logger()
     try:
         from osgeo import ogr
 
@@ -387,51 +463,58 @@ GeometryIterable = Iterable[BaseGeometry]
 
 
 def write_geoms_to_file(
-    geoms_iter: GeometryIterable,
-    geoms_epsg: int,
     filename: str,
     driver_name: str,
+    geoms_iter: GeometryIterable,
+    geoms_epsg: Optional[int] = None,
     layer: Optional[LayerID] = None,
     mode: Literal["update", "overwrite"] = "update",
-):
+) -> None:
     """Write multiple geometrical features to disk.
 
     The function takes as input an iterable of geometrical features
-    and writes them to disk using one of the existing GDAL/OGR
-    drivers.
+    and writes them to disk using one of the existing `GDAL/OGR drivers
+    <https://gdal.org/drivers/vector/index.html>`_.
 
+    Parameters
+    ----------
+    filename : `str`
+        Path to the output file where the geometrical features will be
+        written to.
+    driver_name : `str`
+        Name of the GDAL/OGR driver to use for writing the file.
+    geoms_iter : iterable of `shapely.geometry.base.BaseGeometry`
+        Iterable of the geometrical/geographical features to write.
+    geoms_epsg : `int`, optional
+        EPSG code of the input geometrical features. If the Spatial
+        Reference System of the input geometrical features is
+        specified and differs from that of the layer they will
+        written to (in case of an update, see``mode`` parameter), the
+        coordinates of the geometries will be reprojected to the
+        layer's Spatial Reference System. It is set to `None` as
+        default (no Spatial Reference System).
+    layer : `LayerID`, optional
+        Layer name/index on which to write the input geometries. In
+        case of a file update (see ``mode`` parameter), the index of
+        an existing layer can be passed as argument. If layer is set
+        to `None` (default), the geometrical features will be written,
+        in ``update`` mode, on the first layer available (at index 0),
+        if any. If no layer is available, as well as in ``overwrite``
+        mode, the layer parameter set to `None` will result in the
+        function writing the input geometries to a layer named
+        ``default`` (if the driver supports named layers).
+    mode : {``"update"``, ``"overwrite"``}
+        If set to ``"update"``, the function will update an existing
+        file, or will create it if it does not exist. If set to
+        ``"overwrite"``, the function will delete any file at the path
+        set to the ``filename`` parameter, and will create a new file
+        at this same location.
 
-    Positional parameters:
-
-    geoms_iter: iterable of geometrical features
-    ("shapely.geometry.base.BaseGeometry" instances).
-    geoms_epsg: EPSG code of the input geometrical features. If the
-    Spatial Reference System of the input geometrical features is
-    different from that of the layer they will written to (in case of
-    an update, see "mode" parameter), the coordinates of the
-    geometries will be reprojected to the layer's Spatial Reference
-    System.
-    filename: path to the output file where the geometrical features
-    will be written to.
-
-    Keyword parameters:
-
-    layer: layer name on which to write the input geometries. In case
-    of a file update (see "mode" parameter), the index of an existing
-    layer can be passed as argument. If layer is set to "None"
-    (default), the geometrical features will be written, in "update"
-    mode, on the first layer available (at index 0), if any. If no
-    layer is available, as well as in "overwrite" mode, the layer
-    parameter set to "None" will result in the function writing the
-    input geometries to a layer named "default" (if the driver
-    supports named layers).
-    mode: one of "update" or "overwrite". If set to "update", the
-    function will update an existing file, or will create it if it
-    does not exist. If set to "overwrite", the function will delete
-    any file at the path set to the "filename" parameter, and will
-    create a new file at this same location.
+    Returns
+    -------
+    `None`
     """
-    logger = setup_logger()
+    logger = _setup_logger()
     try:
         from osgeo import ogr, osr
 
@@ -442,9 +525,12 @@ def write_geoms_to_file(
             f"{inspect.stack()[0].function!r}!"
         )
     driver = ogr.GetDriverByName(driver_name)
-    geoms_epsg = int(geoms_epsg)
-    srs = osr.SpatialReference()
-    srs.ImportFromEPSG(geoms_epsg)
+    if geoms_epsg is not None:
+        geoms_epsg = int(geoms_epsg)
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(geoms_epsg)
+    else:
+        srs = None
     geoms_iter = iter(geoms_iter)
     #    geoms_list = iter(geoms_iter)
     #    if not len(set(g.__class__ for g in geoms_list)) == 1:
@@ -472,7 +558,7 @@ def _update_geoms_file(
     ds = driver.Open(filename, 1)
     if ds is None:
         _write_geoms_file(
-            geoms_iter, geom_type, srs, filename, driver, layer_name, logger
+            geoms_iter, geom_type, srs, filename, driver, layer, logger
         )
         return
     if layer is not None:
@@ -489,7 +575,7 @@ def _update_geoms_file(
     else:
         lyr_def = lyr_obj.GetLayerDefn()
         lyr_epsg = _get_layer_epsg(lyr_obj)
-        if lyr_epsg is not None and lyr_epsg != geoms_epsg:
+        if geoms_epsg is not None and lyr_epsg is not None and lyr_epsg != geoms_epsg:
             logger.info(
                 f"The spatial reference system of the output file {filename!r}, "
                 f"layer {layer!r}, is different from that of the input geometry "
@@ -505,8 +591,9 @@ def _update_geoms_file(
             )
     for geom in geoms_iter:
         feature = ogr.Feature(lyr_def)
-        feature.SetGeometry(ogr.CreateGeometryFromWkt(transform_geom(geom).wkt))
-        print(lyr_obj.CreateFeature(feature))
+        geom = transform_geom(geom)
+        feature.SetGeometry(ogr.CreateGeometryFromWkt(geom.wkt))
+        lyr_obj.CreateFeature(feature)
         feature = None
     ds = None
 

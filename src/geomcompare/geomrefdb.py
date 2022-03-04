@@ -10,18 +10,21 @@ import sqlite3
 import time
 import uuid
 from tempfile import NamedTemporaryFile
+from typing import Optional, Literal
+from collections.abc import Generator, Callable
 
 import psycopg2
 import pyproj
 import rtree
 import shapely.ops
+from shapely.geometry.base import BaseGeometry
 from pyproj.exceptions import CRSError
 from shapely import speedups, wkb
 
 from .comparefunc import geoms_always_match
 from .geomrefdb_abc import GeomRefDB
 from .geomutils import geom_type_mapping, get_transform_func, to_2D, unchanged_geom
-from .io import setup_logger, update_logger
+from .io import _setup_logger, _update_logger, GeometryIterable
 from .misc import SharedIterator, split_iter_to_lists
 
 
@@ -57,7 +60,7 @@ class PostGISGeomRefDB(GeomRefDB):
         return int(res[0])
 
     def true_positives(self, geoms_iter, geoms_EPSG, same_geoms_func):
-        self.logger = setup_logger()
+        self.logger = _setup_logger()
         self.logger.info("Searching true positive geometries...")
         PG_geoms_EPSG = self.get_PG_geoms_EPSG()
         transform = PG_geoms_EPSG != int(geoms_EPSG)
@@ -90,7 +93,7 @@ class PostGISGeomRefDB(GeomRefDB):
         logger.info("Done searching true positive geometries.")
 
     def false_positives(self, geoms_iter, geoms_EPSG, same_geoms_func):
-        logger = setup_logger()
+        logger = _setup_logger()
         logger.info("Searching false positive geometries...")
         PG_geoms_EPSG = self.get_PG_geoms_EPSG()
         transform = PG_geoms_EPSG != int(geoms_EPSG)
@@ -126,7 +129,7 @@ class PostGISGeomRefDB(GeomRefDB):
         logger.info("Done searching false positive geometries.")
 
     def missing_geometries(self, geoms_iter, AOI_geom, geoms_EPSG, same_geoms_func):
-        logger = setup_logger()
+        logger = _setup_logger()
         logger.info("Searching missing geometries...")
         PG_geoms_EPSG = self.get_PG_geoms_EPSG()
         transform = PG_geoms_EPSG != int(geoms_EPSG)
@@ -176,7 +179,7 @@ class RtreeGeomRefDB(GeomRefDB):
         self.EPSG = geoms_EPSG
 
     def true_positives(self, geoms_iter, geoms_EPSG, same_geoms_func):
-        logger = setup_logger()
+        logger = _setup_logger()
         logger.info("Searching true positive geometries...")
         transform = geoms_EPSG != self.EPSG
         if transform:
@@ -202,7 +205,7 @@ class RtreeGeomRefDB(GeomRefDB):
         logger.info("Done searching true positive geometries.")
 
     def false_positives(self, geoms_iter, geoms_EPSG, same_geoms_func):
-        logger = setup_logger()
+        logger = _setup_logger()
         logger.info("Searching false positive geometries...")
         transform = geoms_EPSG != self.EPSG
         if transform:
@@ -240,7 +243,7 @@ class RtreeGeomRefDB(GeomRefDB):
                 yield el.object
 
     def missing_geometries(self, geoms_iter, AOI_geom, geoms_EPSG, same_geoms_func):
-        logger = setup_logger()
+        logger = _setup_logger()
         logger.info("Searching missing geometries...")
         index = rtree.index.Index()
         for i, geom in enumerate(geoms_iter):
@@ -273,49 +276,97 @@ class RtreeGeomRefDB(GeomRefDB):
                     yield ref_geom
         logger.info("Done searching missing geometries.")
 
+#: Geometry types supported by the :py:class:`SQLiteGeomRefDB` class.
+SUPPORTED_GEOM_TYPE = Literal[
+    "Point",
+    "LineString",
+    "Polygon",
+    "MultiPoint",
+    "MultiLineString",
+    "MultiPolygon",
+    "GeometryCollection",
+]
 
 class SQLiteGeomRefDB(GeomRefDB):
     """Concrete implementation of the GeomRefDB ABC using SQLite.
 
-    SQLiteGeomRefDB is a concrete implementation of the interface
-    defined by the GeomRefDB abstract base class. It enables to load
-    an existing (or create a new) SQLite database, where geometry
-    datasets can be stored and can be compared (based on geometry
-    similarity functions) with other geometrical features from an
-    external dataset. This class makes use of the spatialite extension
-    of SQLite, and as such, spatialite must be installed and available
-    in order to work with instances of this class.
-    """
+    SQLiteGeomRefDB is a concrete implementation of the interface defined
+    by the GeomRefDB abstract base class. It enables to load an existing
+    (or create a new) SQLite database, where geometry datasets can be
+    stored and can be compared (based on geometry similarity functions)
+    with other geometrical features from an external dataset. Instances of
+    this class can handle simultaneously multiple reference datasets, with
+    various geometry types (see :py:attr:`supported_geom_types`) and
+    spatial reference systems.
 
-    @property
-    def supported_geom_types(self):
-        return [
-            "Point",
-            "LineString",
-            "Polygon",
-            "MultiPoint",
-            "MultiLineString",
-            "MultiPolygon",
-            "GeometryCollection",
-        ]
+    Parameters
+    ----------
+    filename : `str`, optional
+        Path to an existing spatialite database.
+    default_epsg : `int`, optional
+        Default EPSG code of the geometrical/geographical features that
+        will be added to the database. If specified, the EPSG code will be
+        default value of the ``geoms_epsg`` parameter for any subsequent
+        call of the :py:meth:`add_geometries` method.
+    geoms_iter : iterable of `shapely.geometry.base.BaseGeometry`, optional
+        Iterable of the geometrical/geographical features to add to this
+        :py:class:`SQLiteGeomRefDB` instance. Such features can also be
+        added later to the class instance with the
+        :py:meth:àdd_geometries`.
+    geoms_tab_name : `str`, optional
+        Name of the table where the geometrical/geographical features are
+        to be stored. If the ``geoms_iter`` parameter is not given,
+        ``geoms_tab_name`` will be ignored.
+    geom_type : :py:const:`SUPPORTED_GEOM_TYPE`, optional
+        Geometry type of the geometrical/geographical features passed as
+        argument to the ``geoms_iter`` parameter.
+    geoms_epsg : `int`, optional
+        EPSG code of the geometrical/geographical features passed as
+        argument to the ``geoms_iter`` parameter. If specified, it
+        overrides the ``default_epsg`` parameter during the instance
+        construction.
+    in_ram : bool, default: ``True``
+        Set to ``True`` to create/load the database in RAM for faster
+        access. Set to ``False`` for larger-than-RAM databases.
+    logger : `logging.Logger`, optional
+        Logger instance to use for logging outputs.
+    logger_name : `str`, optional
+        Name of the `logging.Logger` object to create for logging
+        outputs. This parameter will be ignored if a Logger instance is
+        passed to the ``logger`` parameter.
+    logging_level : `int`, default: ``logging.INFO``
+        Logging level of the logging output. For mor information, please
+        see the documentation of the `logging` module.
+
+    Raises
+    ------
+    ValueError
+        If ``in_ram=False`` and ``filename=None``.
+
+    Notes
+    -----
+    This class makes use of the spatialite extension of SQLite, and as
+    such, spatialite must be installed and available in order to work with
+    instances of this class.
+    """
 
     def __init__(
         self,
-        db_path=None,
-        default_epsg=None,
-        geoms_iter=None,
-        geoms_tab_name=None,
-        geom_type=None,
-        geoms_epsg=None,
-        in_ram=True,
-        logger=None,
-        logger_name=None,
-        logging_level=logging.INFO,
-    ):
-        if db_path is not None:
-            self.db_path = os.path.abspath(db_path)
+        filename: Optional[str] = None,
+        default_epsg: Optional[int] = None,
+        geoms_iter: Optional[GeometryIterable] = None,
+        geoms_tab_name: Optional[str] = None,
+        geom_type: Optional[SUPPORTED_GEOM_TYPE] = None,
+        geoms_epsg: Optional[int] = None,
+        in_ram: bool = True,
+        logger: Optional[logging.Logger] = None,
+        logger_name: Optional[str] = None,
+        logging_level: int = logging.INFO,
+    ) -> None:
+        if filename is not None:
+            self._filename = os.path.abspath(filename)
         else:
-            self.db_path = None
+            self._filename = None
         if default_epsg is not None:
             try:
                 default_epsg = int(default_epsg)
@@ -323,61 +374,61 @@ class SQLiteGeomRefDB(GeomRefDB):
             except (CRSError, ValueError, TypeError):
                 raise ValueError("{!r} ('default_epsg') is not a valid EPSG code!")
             else:
-                self.default_epsg = default_epsg
+                self._default_epsg = default_epsg
         else:
-            self.default_epsg = None
-        self.in_ram = in_ram
+            self._default_epsg = None
+        self._in_ram = in_ram
         if logger is not None:
-            self.logger = logger
+            self._logger = logger
         else:
             if logger_name is None:
                 logger_name = type(self).__name__
-            self.logger = setup_logger(name=logger_name, level=logging_level)
+            self._logger = _setup_logger(name=logger_name, level=logging_level)
 
-        if db_path is not None and not os.path.isfile(db_path):
+        if filename is not None and not os.path.isfile(filename):
             new_db = True
         else:
             new_db = False
-        if db_path is None:
+        if filename is None:
             if not in_ram:
                 raise ValueError(
-                    "The 'db_path' and 'in_ram' parameters cannot both be None!"
+                    "The 'filename' cannot be set to None if 'in_ram' is set to False!"
                 )
             else:
-                self.conn = sqlite3.connect(":memory:")
-                self.conn.enable_load_extension(True)
-                self.conn.load_extension("mod_spatialite")
-                cursor = self.conn.cursor()
+                self._conn = sqlite3.connect(":memory:")
+                self._conn.enable_load_extension(True)
+                self._conn.load_extension("mod_spatialite")
+                cursor = self._conn.cursor()
                 cursor.execute("SELECT InitSpatialMetaData();")
-                self.conn.commit()
-                self.logger.info("New database created in RAM.")
+                self._conn.commit()
+                self._logger.info("New database created in RAM.")
         elif in_ram:
-            self.conn = sqlite3.connect(":memory:")
-            self.conn.enable_load_extension(True)
-            self.conn.load_extension("mod_spatialite")
+            self._conn = sqlite3.connect(":memory:")
+            self._conn.enable_load_extension(True)
+            self._conn.load_extension("mod_spatialite")
             if not new_db:
-                disk_conn = sqlite3.connect(db_path)
-                disk_conn.backup(self.conn)
+                disk_conn = sqlite3.connect(filename)
+                disk_conn.backup(self._conn)
                 disk_conn.close()
-                self.logger.info(
-                    f"Database file {db_path!r} successfully loaded in RAM."
+                self._logger.info(
+                    f"Database file {filename!r} successfully loaded in RAM."
                 )
             else:
                 cursor = conn.cursor()
                 cursor.execute("SELECT InitSpatialMetaData();")
-                self.conn.commit()
-                self.logger.info(
+                self._conn.commit()
+                self._logger.info(
                     f"File {dp_path!r} does not exist, new database created in RAM."
                 )
         else:
-            self.conn = sqlite3.connect(db_path)
-            self.conn.enable_load_extension(True)
-            self.conn.load_extension("mod_spatialite")
+            self._conn = sqlite3.connect(filename)
+            self._conn.enable_load_extension(True)
+            self._conn.load_extension("mod_spatialite")
             if new_db:
                 cursor = conn.cursor()
                 cursor.execute("SELECT InitSpatialMetaData();")
-                self.conn.commit()
-                self.logger.info(f"New database created at {db_path!r}.")
+                self._conn.commit()
+                self._logger.info(f"New database created at {filename!r}.")
         if geoms_iter is not None:
             try:
                 self.add_geometries(
@@ -388,19 +439,70 @@ class SQLiteGeomRefDB(GeomRefDB):
                 )
             except Exception:
                 if new_db and not in_ram:
-                    self.logger.error(
+                    self._logger.error(
                         "An error occurred while adding geometries to the database, "
-                        f"deleting file {db_path!r}..."
+                        f"deleting file {filename!r}..."
                     )
-                    os.remove(db_path)
+                    os.remove(filename)
                 else:
-                    self.logger.error(
+                    self._logger.error(
                         "An error occurred while adding geometries to the database..."
                     )
                 raise
 
+    @classmethod
+    @property
+    def supported_geom_types(cls) -> list[SUPPORTED_GEOM_TYPE]:
+        """`list` of supported geometry types: Types supported by the
+        :py:class:`SQLiteGeomRefDB`.
+        """
+        return [
+            "Point",
+            "LineString",
+            "Polygon",
+            "MultiPoint",
+            "MultiLineString",
+            "MultiPolygon",
+            "GeometryCollection",
+        ]
+
+    @property
+    def filename(self) -> Optional[str]:
+        """Path of the opened database file. The attribute is set to
+        `None` if a new database was created in RAM for this instance.
+        """
+        return self._filename
+
+    @property
+    def in_ram(self) -> bool:
+        """``True`` if the database is created/loaded in RAM. ``False``
+        if the instance is connected to database file on disk.
+        """
+        return self._in_ram
+
+    @property
+    def default_epsg(self) -> int:
+        """Default EPSG code of the geometrical/geographical features
+        that are added to the database.
+        """
+        return self._default_epsg
+
+    @default_epsg.setter
+    def default_epsg(self, value: int) -> None:
+        self.logger.info(f"The 'default_epsg' is now set to {default_epsg}.")
+        self._default_epsg = value
+
+    @property
+    def logger(self) -> logging.Logger:
+        """Ready configured Logger instance used for logging outputs.
+        """
+        return self._logger
+
     def __del__(self):
-        self.conn.close()
+        """Close the connection to the SQLite database and do some
+        cleanup if the instance has been pickled.
+        """
+        self._conn.close()
         if hasattr(self, "db_tf") and os.path.isfile(self.db_tf):
             try:
                 os.remove(self.db_tf)
@@ -408,52 +510,147 @@ class SQLiteGeomRefDB(GeomRefDB):
                 pass
 
     def __getstate__(self):
+        """Get state when pickling the instance.
+        """
         db_tf = NamedTemporaryFile(suffix=".db", delete=False)
         db_tf.close()
-        update_logger(self.logger, level=None)
+        _update_logger(self.logger, level=None)
         self.save_db(db_tf.name)
-        update_logger(self.logger, level=self.logger.getEffectiveLevel())
+        _update_logger(self.logger, level=self.logger.getEffectiveLevel())
         attrs = self.__dict__.copy()
         attrs["db_tf"] = db_tf.name
-        attrs["conn"] = None
+        attrs["_conn"] = None
         return attrs
 
     def __setstate__(self, state):
+        """Set state when unpickling an instance.
+        """
         self.__dict__ = state
         if self.in_ram:
             disk_conn = sqlite3.connect(self.db_tf)
-            self.conn = sqlite3.connect(":memory:")
-            disk_conn.backup(self.conn)
+            self._conn = sqlite3.connect(":memory:")
+            disk_conn.backup(self._conn)
             disk_conn.close()
         else:
-            self.conn = sqlite3.connect(self.db_tf)
-        self.conn.enable_load_extension(True)
-        self.conn.load_extension("mod_spatialite")
+            self._conn = sqlite3.connect(self.db_tf)
+        self._conn.enable_load_extension(True)
+        self._conn.load_extension("mod_spatialite")
 
-    def save_db(self, path, overwrite=True):
-        if os.path.isfile(path):
+    def save_db(self, filename: str, overwrite: bool = True) -> None:
+        """Save the internal SQLite database to disk.
+
+        The function saves the internal SQLite database, together with all
+        the geometrical/geographical features added with
+        :py:meth:`add_geometries`, to disk. The path of the resulting
+        output file can later be passed to the ``filename`` argument of the
+        :py:class:`SQLiteGeomRefDB` class' constructor to load the saved
+        database with all its features. This function is useful only to
+        save loaded-in-RAM databases, as the geometrical/geographical
+        features added to a :py:class:`SQLiteGeomRefDB` instance, with an
+        opened connections to databases that reside on disk, will be saved
+        automatically even after the instance destruction.
+
+        Parameters
+        ----------
+        filename : `str`
+            Path of the output database file.
+        overwrite : `bool`, default: ``True``
+            ``True`` if the output file should overwrite any existing file
+            at path ``filename``, else ``False``.
+
+        Returns
+        -------
+        `None`
+        """
+        if os.path.isfile(filename):
             if overwrite:
-                self.logger.info(f"File {path!r} already exists. Removing file...")
-                os.remove(path)
+                self.logger.info(f"File {filename!r} already exists. Removing file...")
+                os.remove(filename)
             else:
                 self.logger.info(
-                    f"File {path!r} already exists. Saving database aborted."
+                    f"File {filename!r} already exists. Saving database aborted."
                 )
                 return
-        disk_conn = sqlite3.connect(path)
-        self.conn.backup(disk_conn)
+        disk_conn = sqlite3.connect(filename)
+        self._conn.backup(disk_conn)
         disk_conn.close()
         self.logger.info("Database was saved successfully.")
 
     def add_geometries(
-        self, geoms_iter, geom_type=None, geoms_epsg=None, geoms_tab_name=None
+        self,
+        geoms_iter: GeometryIterable,
+        geom_type: Optional[SUPPORTED_GEOM_TYPE] = None,
+        geoms_epsg: Optional[int] = None,
+        geoms_tab_name: Optional[str] = None,
     ):
+        """Add geometrical features to the internal SQLite database.
+
+        The function adds geometrical features to the internal SQLite
+        database, which can then be used as a "reference dataset" when
+        running other public methods of the :py:class:`SQLiteGeomRefDB`
+        instance.
+
+        Parameters
+        ----------
+        geoms_iter : iterable of `shapely.geometry.base.BaseGeometry`
+            Iterable of the geometrical/geographical features to add to
+            this :py:class:`SQLiteGeomRefDB` instance.
+        geom_type : :py:const:`SUPPORTED_GEOM_TYPE`, optional
+            Geometry type of the input geometrical/geographical
+            features. If the ``geom_type`` is not specified by the user,
+            the function will assume that the input features have the same
+            geometry type as the features already stored in the destination
+            table.
+        geoms_epsg : `int`, optional
+            EPSG code of the input geometrical/geographical features. If
+            the ``geoms_epsg`` is not specified by the user, the function
+            will assume that the input features are in the same spatial
+            reference system as the features already stored in the
+            destination table. Also, if the input features are to be stored
+            in a new table of the database and the ``geoms_epsg`` is
+            omitted, the :py:class:`SSQLiteGeomRefDB` instance will use the
+            EPSG code stored in the :py:attr:`default_epsg` attribute (if
+            set).
+        geoms_tab_name : `str`, optional
+            Name of the table where the input geometrical/geographical
+            features are to be stored in the internal SQLite database. If
+            no argument is passed to the ``geoms_tab_name`` parameter, the
+            function will try to store the input geometrical/geographical
+            features into a table named *default_table*. The
+            *default_table* table will be created if it does not already
+            exist in the database.
+
+        Raises
+        ------
+        ValueError
+            If ``geom_type`` is not specified, in the case of a new
+            database/table.
+        ValueError
+            If ``geoms_epsg`` is not specified, in the case of a new
+            database/table and if the :py:attr:`default_epsg` attribute is
+            not set.
+        ValueError
+            If the argument passed to the ``geom_type`` parameter does not
+            match the geometry type of the features already stored in the
+            destination table.
+
+        Warnings
+        --------
+        The *geometry type* must be the same for all input features as they
+        are to be stored in the same *geometry column* of the same table,
+        and spatialite does not allow *geometry columns* to have mixed
+        *geometry types*.
+
+        Returns
+        -------
+        None
+        """
         self.logger.info("Adding geometries to the database...")
         db_info = self.db_geom_info()
         ## Coordinates of input geometries are not transformed by
         ## default. Return the input geometry unchanged.
         transform_geom = unchanged_geom
-        cursor = self.conn.cursor()
+        cursor = self._conn.cursor()
         if geom_type is not None and not geom_type in self.supported_geom_types:
             raise ValueError(
                 f"{geom_type!r} is not a valid value for the 'geom_type' argument! "
@@ -477,9 +674,9 @@ class SQLiteGeomRefDB(GeomRefDB):
         if new_tab:
             if geom_type is None:
                 raise ValueError(
-                    "'geom_type' cannot be passed None for new databases, or if no "
-                    "existing geometry table name ('geoms_tab_name') was passed as "
-                    "parameter!"
+                    "'geom_type' cannot be passed None for new databases/tables, "
+                    "or if no existing geometry table name ('geoms_tab_name') "
+                    "was passed as parameter!"
                 )
             if geoms_epsg is None:
                 if self.default_epsg is not None:
@@ -500,7 +697,7 @@ class SQLiteGeomRefDB(GeomRefDB):
             cursor.execute(
                 f"SELECT CreateSpatialIndex('{geoms_tab_name}', 'geometry');"
             )
-            self.conn.commit()
+            self._conn.commit()
 
         else:  # if existing table
             if geom_type is not None and geom_type != tab_info["geom_type"]:
@@ -519,16 +716,52 @@ class SQLiteGeomRefDB(GeomRefDB):
                 f"(GeomFromText('{transform_geom(to_2D(geom)).wkt}', "
                 f"{geoms_epsg}));"
             )
-        self.conn.commit()
+        self._conn.commit()
 
-    def db_geom_info(self, to_stdout=False):
+    def db_geom_info(
+        self, to_stdout: bool = False, count_features: bool = False
+    ) -> Optional[dict]:
+        """Get information on features stored in the internal SQLite database.
 
-        cursor = self.conn.cursor()
+        Get information on the geometrical/geographical features such as
+        the name of the table(s) where they are stored, their geometry
+        type(s), spatial reference system(s) and the number of features per
+        table. This information can be returned as `dict` instance, or
+        printed to *stdout*.
+
+        Parameters
+        ----------
+        to_stdout : bool, default: ``False``
+            If set to ``False``, the information is returned as a
+            `dict`. If set to ``True``, the information is written to
+            *stdout*.
+        count_features : bool, default: ``False``
+            If set to ``True``, the function will also return the number of
+            features/rows per table. If set to ``False``, the features will
+            not be counted.
+
+        Returns
+        -------
+        `dict` or `None`
+            If ``to_stdout=False``, returns a `dict` which keys are the
+            table name(s), and which values are information on the
+            individual table(s). This information is itself structured as a
+            `dict`, which key/value pairs indicate for each table the
+            geometry type (key: *geom_type*), the spatial reference system
+            (key: *srid*), and optionally (if ``count_features=True``) the
+            features count (key: *count*). The function returns `None` if
+            ``to_stdout=True``.
+        """
+        cursor = self._conn.cursor()
         cursor.execute("SELECT * FROM geometry_columns")
         info = {
             tab[0]: {"geom_type": geom_type_mapping[tab[2]], "srid": tab[4]}
             for tab in cursor.fetchall()
         }
+        if count_features:
+            for tab in info.keys():
+                cursor.execute(f"SELECT COUNT(*) FROM {tab};")
+                info[tab]["count"] = cursor.fetchone()[0]
         if not to_stdout:
             return info
         elif not info:
@@ -540,16 +773,63 @@ class SQLiteGeomRefDB(GeomRefDB):
             f2_width = max(max(len(info[k]["geom_type"]) for k in info.keys()), len(f2))
             f3 = "EPSG"
             f3_width = max(max(len(str(info[k]["srid"])) for k in info.keys()), len(f3))
-            line_tmp = f"{{:<{f1_width}}} | {{:<{f2_width}}} | {{:>{f3_width}}}\n"
-            head = line_tmp.format(f1, f2, f3)
+            line_tmp = f"{{f1:<{f1_width}}} | {{f2:<{f2_width}}} | {{f3:>{f3_width}}}"
+            if count_features:
+                f4 = "COUNT"
+                f4_width = max(max(len(str(info[k]["count"])) for k in info.keys()), len(f4))
+                line_tmp += f" | {{f4:>{f4_width}}}"
+            line_tmp += "\n"
+            head = line_tmp.format(**locals())
             line_width = len(head) - 1
             table = f"\n{head}{'-' * line_width}\n"
-            for k, v in info.items():
-                table += line_tmp.format(k, v["geom_type"], str(v["srid"]))
+            if count_features:
+                for k, v in info.items():
+                    table += line_tmp.format(
+                        f1=k, f2=v["geom_type"], f3=str(v["srid"]), f4=str(v["count"])
+                    )
+            else:
+                for k, v in info.items():
+                    table += line_tmp.format(f1=k, f2=v["geom_type"], f3=str(v["srid"]))
             print(table)
 
     @staticmethod
-    def _get_spatial_query(spatial_index=True, only_within_aoi=False, within_aoi=False):
+    def _get_spatial_query(spatial_index: bool = True, only_within_aoi: bool = False,
+                           within_aoi: bool = False) -> str:
+        """Builds SQL spatial query templates for accessing the database's features.
+
+        This function builds SQL spatial query template for fast access to
+        the features stored in the database. It can create templates where
+        the queries use the internal spatial index to search for features
+        within a *search frame*, and/or where the features returned must
+        lie within an *area of interest*.
+
+        Parameters
+        ----------
+        spatial_index : bool, default: ``True``
+            If set to ``True``, create a template for using the spatial
+            index and search for features that lie within a *search frame*
+            and/or an *area of interest*. If set to ``False``, create a
+            template for returning all features of table, without filtering
+            (overrinding both ``only_within_aoi`` and ``within_aoi``).
+        only_within_aoi : bool, default: ``False``
+            If set to ``True``, create a template that will use the spatial
+            index for searching for features that only intersect with an
+            *area of interest*, without further filtering. If set to
+            ``False``, create a template that may use the spatial index for
+            searching for features lying within an *area of interest*
+            and/or within a *search frame*
+        within_aoi : bool, default: ``False``
+            If set to ``True``, create a template that will use the spatial
+            index for searching for features that intersect with an *area
+            of interest*. If set to ``False``, the created template may not
+            filter out features based on a *area of interest* (depending on
+            the value passed to the ``only_within_aoi`` parameter).
+
+        Returns
+        -------
+        ``str``
+            Template of the SQL query.
+        """
         query = "SELECT AsBinary(geometry) FROM {{table}}"
         if not spatial_index:
             return query.format() + ";"
@@ -589,8 +869,16 @@ class SQLiteGeomRefDB(GeomRefDB):
         query,
         query_kwargs,
         matching_geoms=True,
-    ):
-        cursor = self.conn.cursor()
+    ) -> Generator[BaseGeometry]:
+        """Yield (non-)matching features resulting from the SQL query.
+
+        Function generator that formats a SQL query template (from
+        :py:method:`_get_spatial_query`), and executes the resulting query
+        for each input feature. The feature(s) resulting from the queries
+        is/are yielded by the function, depending on whether its/their
+        geometries match the geometry of the input features or not.
+        """
+        cursor = self._conn.cursor()
         if matching_geoms:
             for geom in geoms_iter:
                 geom_reproj = transform_geom(to_2D(geom))
@@ -612,14 +900,81 @@ class SQLiteGeomRefDB(GeomRefDB):
 
     def true_positives(
         self,
-        geoms_iter,
-        aoi_geom=None,
-        geoms_epsg=None,
-        geoms_tab_name=None,
-        geoms_match=None,
-        get_search_frame=None,
-        ncores=None,
-    ):  # , **kwargs):
+        geoms_iter: GeometryIterable,
+        aoi_geom: Optional[BaseGeometry] = None,
+        geoms_epsg: Optional[int] = None,
+        geoms_tab_name: Optional[str] = None,
+        geoms_match: Callable[[BaseGeometry, BaseGeometry], bool] = None,
+        get_search_frame: Callable[[BaseGeometry], BaseGeometry] = None,
+        ncores: Optional[int] = None,
+    ) -> Generator[BaseGeometry]:  # , **kwargs):
+        """Identidy *matching* **input** geometries.
+
+        The function takes as input geometrical/geographical features, and
+        searches for *reference features* in one table of the internal
+        database which geometries are considered to *match* that of the
+        *input features*. All *input features* that have a geometry that
+        *matches* the geometry of at least one of the *reference features*
+        will be yielded back by the function.
+
+        Parameters
+        ----------
+        geoms_iter : iterable of `shapely.geometry.base.BaseGeometry`
+            Iterable of input geometrical/geographical features to compare
+            to the features of the internal SQLite database.
+        aoi_geom : `shapely.geometry.base.BaseGeometry`, optional
+            *Area of interest*, within which the database's features must
+            lie.
+        geoms_epsg : `int`, optional
+            EPSG code of the input geometrical/geographical features
+            (including ``aoi_geom`` if specified). If the ``geoms_epsg`` is
+            not specified by the user, the function will assume that the
+            *input features* are in the same spatial reference system as
+            the *reference features*.
+        geoms_tab_name : `str`, optional
+            Name of the table where database's features that will be used
+            as reference are stored. If no argument is passed to the
+            ``geoms_tab_name`` parameter, the function will search for
+            *reference features* in a table named *default_table*.
+        geoms_match : `callable`, optional
+            Comparison function that takes two positional arguments:
+
+            - ``gtest``: *input* geometry
+              (`shapely.geometry.base.BaseGeometry`)
+            - ``gref``: *reference* geometry
+              (`shapely.geometry.base.BaseGeometry`)
+
+            The function returns ``True`` if it finds that both geometries
+            *match*, else returns ``False``. If this parameter is omitted,
+            the *input* geometrical/geographical feature will always be
+            considered as a *match* in the case where its *search frame*
+            (see ``get_search_frame`` parameter) interesects with one of
+            the feature from the database's table.
+        get_search_frame : `callable`, optional
+            Function that takes as single argument an *input* geometry
+            (`shapely.geometry.base.BaseGeometry`) and returns its *search
+            frame* (`shapely.geometry.base.BaseGeometry`). If this
+            parameter is omitted, the *search frame* will be the same as
+            the *input* geometry.
+        ncores : `int`, optional
+            Number of cores to use for running the function. If
+            unspecified, the function will run in a single process
+
+        Yields
+        ------
+        `shapely.geometry.base.BaseGeometry`
+            *Matching input* geometrical/geographical features.
+
+        Notes
+        -----
+        If the *spatial reference system* of the *input*
+        geometrical/geographical features is different from that of the
+        database's features, the *input features*' coordinates are
+        reprojected on-the-fly, before being compared to features stored in
+        the database. If an *input feature* is considered to be a *match*,
+        it is yielded back unchanged (its coordinates in the original
+        *spatial reference system*).
+        """
         self.logger.info("Searching true positive geometries...")
         query_kwargs = dict()
         ## Set default behaviors.
@@ -705,14 +1060,81 @@ class SQLiteGeomRefDB(GeomRefDB):
 
     def false_positives(
         self,
-        geoms_iter,
-        aoi_geom=None,
-        geoms_epsg=None,
-        geoms_tab_name=None,
-        geoms_match=None,
-        get_search_frame=None,
-        ncores=None,
-    ):  # , **kwargs):
+        geoms_iter: GeometryIterable,
+        aoi_geom: Optional[BaseGeometry] = None,
+        geoms_epsg: Optional[int] = None,
+        geoms_tab_name: Optional[str] = None,
+        geoms_match: Callable[[BaseGeometry, BaseGeometry], bool] = None,
+        get_search_frame: Callable[[BaseGeometry], BaseGeometry] = None,
+        ncores: Optional[int] = None,
+    ) -> Generator[BaseGeometry]:  # , **kwargs):
+        """Identify *non-matching* **input** geometries.
+
+        The function takes as input geometrical/geographical features, and
+        searches for *reference features* in one table of the internal
+        database which geometries are considered to *match* that of the
+        *input features*. All *input features* that **DO NOT** have a
+        geometry that matches the geometry of any *reference features* will
+        be yielded back by the function.
+
+        Parameters
+        ----------
+        geoms_iter : iterable of `shapely.geometry.base.BaseGeometry`
+            Iterable of input geometrical/geographical features to compare
+            to the features of the internal SQLite database.
+        aoi_geom : `shapely.geometry.base.BaseGeometry`, optional
+            *Area of interest*, within which the database's features must
+            lie.
+        geoms_epsg : `int`, optional
+            EPSG code of the input geometrical/geographical features
+            (including ``aoi_geom`` if specified). If the ``geoms_epsg`` is
+            not specified by the user, the function will assume that the
+            *input features* are in the same spatial reference system as
+            the *reference features*.
+        geoms_tab_name : `str`, optional
+            Name of the table where database's features that will be used
+            as reference are stored. If no argument is passed to the
+            ``geoms_tab_name`` parameter, the function will search for
+            *reference features* in a table named *default_table*.
+        geoms_match : `callable`, optional
+            Comparison function that takes two positional arguments:
+
+            - ``gtest``: *input* geometry
+              (`shapely.geometry.base.BaseGeometry`)
+            - ``gref``: *reference* geometry
+              (`shapely.geometry.base.BaseGeometry`)
+
+            The function returns ``True`` if it finds that both geometries
+            *match*, else returns ``False``. If this parameter is omitted,
+            the *input* geometrical/geographical feature will always be
+            considered as a *match* in the case where its *search frame*
+            (see ``get_search_frame`` parameter) interesects with one of
+            the features from the database's table.
+        get_search_frame : `callable`, optional
+            Function that takes as single argument an *input* geometry
+            (`shapely.geometry.base.BaseGeometry`) and returns its *search
+            frame* (`shapely.geometry.base.BaseGeometry`). If this
+            parameter is omitted, the *search frame* will be the same as
+            the *input* geometry.
+        ncores : `int`, optional
+            Number of cores to use for running the function. If
+            unspecified, the function will run in a single process
+
+        Yields
+        ------
+        `shapely.geometry.base.BaseGeometry`
+            *Non-matching input* geometrical/geographical features.
+
+        Notes
+        -----
+        If the *spatial reference system* of the *input*
+        geometrical/geographical features is different from that of the
+        database's features, the *input features*' coordinates are
+        reprojected on-the-fly, before being compared to features stored in
+        the database. If an *input feature* is **NOT** considered to be a
+        *match*, it is yielded back unchanged (its coordinates in the
+        original *spatial reference system*).
+        """
         self.logger.info("Searching false positive geometries...")
         query_kwargs = dict()
         ## Set default behaviors.
@@ -798,15 +1220,85 @@ class SQLiteGeomRefDB(GeomRefDB):
 
     def missing_geometries(
         self,
-        geoms_iter,
-        geom_type=None,
-        aoi_geom=None,
-        geoms_epsg=None,
-        geoms_tab_name=None,
-        geoms_match=None,
-        get_search_frame=None,
-        ncores=None,
-    ):  # , **kwargs):
+        geoms_iter: GeometryIterable,
+        geom_type: Optional[SUPPORTED_GEOM_TYPE] = None,
+        aoi_geom: Optional[BaseGeometry] = None,
+        geoms_epsg: Optional[int] = None,
+        geoms_tab_name: Optional[str] = None,
+        geoms_match: Callable[[BaseGeometry, BaseGeometry], bool] = None,
+        get_search_frame: Callable[[BaseGeometry], BaseGeometry] = None,
+        ncores: Optional[int] = None,
+    ) -> Generator[BaseGeometry]:  # , **kwargs):
+        """Identify (missing) *non-matching* **reference** geometries.
+
+        The function takes as input geometrical/geographical features, and
+        searches for *reference features* in one table of the internal
+        database which geometries are **NOT** considered to *match* the
+        geometry of any feature from the input set. All *reference
+        features* that **DO NOT** have a geometry that *matches* the geometry
+        of any *input features* will be yielded by the function.
+
+        Parameters
+        ----------
+        geoms_iter : iterable of `shapely.geometry.base.BaseGeometry`
+            Iterable of input geometrical/geographical features to compare
+            to the features of the internal SQLite database.
+        geom_type : :py:const:`SUPPORTED_GEOM_TYPE`, optional
+            Geometry type of the input geometrical/geographical
+            features. If the ``geom_type`` is not specified by the user,
+            the function will assume that the *input features* have the
+            same ``geom_type`` as the *reference features*.
+        aoi_geom : `shapely.geometry.base.BaseGeometry`, optional
+            *Area of interest*, within which the database's features must
+            lie.
+        geoms_epsg : `int`, optional
+            EPSG code of the input geometrical/geographical features
+            (including ``aoi_geom`` if specified). If the ``geoms_epsg`` is
+            not specified by the user, the function will assume that the
+            *input features* are in the same spatial reference system as
+            the *reference features*.
+        geoms_tab_name : `str`, optional
+            Name of the table where database's features that will be used
+            as reference are stored. If no argument is passed to the
+            ``geoms_tab_name`` parameter, the function will search for
+            *reference features* in a table named *default_table*.
+        geoms_match : `callable`, optional
+            Comparison function that takes two positional arguments:
+
+            - ``gtest``: *input* geometry
+              (`shapely.geometry.base.BaseGeometry`)
+            - ``gref``: *reference* geometry
+              (`shapely.geometry.base.BaseGeometry`)
+
+            The function returns ``True`` if it finds that both geometries
+            *match*, else returns ``False``. If this parameter is omitted,
+            the *input* geometrical/geographical feature will always be
+            considered as a *match* in the case where its *search frame*
+            (see ``get_search_frame`` parameter) interesects with one of
+            the features from the database's table.
+        get_search_frame : `callable`, optional
+            Function that takes as single argument an *input* geometry
+            (`shapely.geometry.base.BaseGeometry`) and returns its *search
+            frame* (`shapely.geometry.base.BaseGeometry`). If this
+            parameter is omitted, the *search frame* will be the same as
+            the *input* geometry.
+        ncores : `int`, optional
+            Number of cores to use for running the function. If
+            unspecified, the function will run in a single process
+
+        Yields
+        ------
+        `shapely.geometry.base.BaseGeometry`
+            *Non-matching reference* geometrical/geographical features.
+
+        Notes
+        -----
+        If the *spatial reference system* of the *input*
+        geometrical/geographical features is different from that of the
+        database's features, the *input features*' coordinates are
+        reprojected on-the-fly, before being compared to features stored in
+        the database.
+        """
         self.logger.info("Searching missing geometries...")
         query_kwargs = dict()
         if geoms_tab_name is None:
@@ -869,8 +1361,11 @@ class SQLiteGeomRefDB(GeomRefDB):
             geoms_epsg=geoms_epsg,
             **logger_conf,
         )
-        query = self._get_spatial_query(only_within_aoi=aoi_geom is not None)
-        cursor = self.conn.cursor()
+        query = self._get_spatial_query(
+            spatial_index=aoi_geom is not None,
+            only_within_aoi=aoi_geom is not None,
+        )
+        cursor = self._conn.cursor()
         cursor.execute(query.format(**query_kwargs))
         geoms_iter = (wkb.loads(row[0]) for row in cursor)
         if ncores is not None:
@@ -883,7 +1378,6 @@ class SQLiteGeomRefDB(GeomRefDB):
                 get_search_frame=get_search_frame,
             )
         else:
-
             mg_gen = input_geoms_db.false_positives(
                 geoms_iter,
                 geoms_epsg=db_epsg,
@@ -895,8 +1389,26 @@ class SQLiteGeomRefDB(GeomRefDB):
         self.logger.info("Done searching missing geometries.")
 
     def _parallelized_method(
-        self, ncores, geoms_iter, *method_args, method_name="", **method_kwargs
+        self, ncores, iterable, *method_args, method_name="", **method_kwargs
     ):
+        """Parallelize function generator methods.
+
+        The function enables to parallelize (use of multiple cores) methods
+        which take as input an iterable and return a generator.
+
+        Parameters
+        ----------
+        ncores : `int`
+            Number of cores to use for parallelizing the method.
+        iterable : `Iterable`
+            Input iterable.
+
+        Notes
+        -----
+        The parallelized method can take any number of positional and
+        keyword arguments, as long as the input iterable is their first
+        positional argument.
+        """
         if not method_name:
             method_name = inspect.stack()[1][3]
         method_obj = getattr(self, method_name, None)
@@ -905,13 +1417,20 @@ class SQLiteGeomRefDB(GeomRefDB):
                 f"{method_name!r} is not a valid method name for "
                 f"the class {cls.__name__!r}!"
             )
+        # Same logging configuration for the workers as for the parent process.
         logger_conf = {
             "name": self.logger.name,
             "level": self.logger.getEffectiveLevel(),
         }
         method_kwargs["logger_conf"] = logger_conf
-        geoms_iters = split_iter_to_lists(geoms_iter, ncores)
+        # Split input iterable into ncores lists of equal length. Note: the
+        # use of lists is for compatibility with the mutliprocessing
+        # module.
+        iterables = split_iter_to_lists(iterable, ncores)
+        # Object to collect the results from the methods running in parallele.
         shared_results_iter = SharedIterator()
+        # Sentinel value for sharing status amongst processes and knowing
+        # when all workers are done.
         nprocs_done = mp.Value("i", 0)
         procs = list()
         for i in range(ncores):
@@ -920,7 +1439,7 @@ class SQLiteGeomRefDB(GeomRefDB):
                     target=self._wrap_method_return,
                     args=[
                         method_obj,
-                        geoms_iters[i],
+                        iterables[i],
                         shared_results_iter,
                         nprocs_done,
                         *method_args,
@@ -941,7 +1460,7 @@ class SQLiteGeomRefDB(GeomRefDB):
             for p in procs:
                 p.terminate()
                 p.join()
-            del geoms_iters
+            del iterables
             raise
         else:
             return shared_results_iter
@@ -949,22 +1468,26 @@ class SQLiteGeomRefDB(GeomRefDB):
     def _wrap_method_return(
         self,
         method_obj,
-        geoms_iter,
+        iterable,
         shared_results_iter,
         nprocs_done,
         *method_args,
-        logger_conf=None,
+        logger_conf=None, # must be here!!
         **method_kwargs,
     ):
+        """Wraps the generators returned by the parallelized method, and
+        appends their elements to a shared object compatible with
+        multiprocessing.
+        """
         if logger_conf is None:
-            logger = setup_logger(name=str(uuid.uuid1()), level=None)
+            logger = _setup_logger(name=str(uuid.uuid1()), level=None)
         else:
             logger_conf["name"] = (
                 logger_conf.get("name", type(self).__name__) + f" (PID: {os.getpid()})"
             )
-            logger = setup_logger(**logger_conf)
+            logger = _setup_logger(**logger_conf)
         logger.info("Start worker function.")
-        res = list(method_obj(geoms_iter, *method_args, **method_kwargs))
+        res = list(method_obj(iterable, *method_args, **method_kwargs))
         n_geoms = len(res)
         if n_geoms > 1:
             logger.info(f"{n_geoms} geometries found.")

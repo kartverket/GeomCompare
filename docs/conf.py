@@ -43,6 +43,8 @@ except FileNotFoundError:
 try:
     import sphinx
 
+    apidoc.OPTIONS.remove("undoc-members")
+
     cmd_line = f"sphinx-apidoc --implicit-namespaces -f -o {output_dir} {module_dir}"
 
     args = cmd_line.split(" ")
@@ -71,10 +73,17 @@ extensions = [
     "sphinx.ext.doctest",
     "sphinx.ext.ifconfig",
     "sphinx.ext.mathjax",
+    "sphinx_toolbox.more_autodoc.typevars",
+    "sphinx_toolbox.more_autodoc.variables",
+    "sphinx_toolbox.more_autodoc.autonamedtuple",    
     "sphinx.ext.napoleon",
     "m2r2",
     "sphinx_rtd_theme",
+#    "sphinx_toolbox.more_autodoc.typehints",
 ]
+
+autodoc_typehints = "none"
+autodoc_member_order = "bysource"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -93,7 +102,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "geomcompare"
-copyright = "2021, Mathieu Tachon"
+copyright = "2021-2022, Mathieu Tachon, Kartverket"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -128,7 +137,7 @@ release = version
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", ".venv"]
 
 # The reST default role (used for this markup: `text`) to use for all documents.
-# default_role = None
+default_role = "py:obj"
 
 # If true, '()' will be appended to :func: etc. cross-reference text.
 # add_function_parentheses = True

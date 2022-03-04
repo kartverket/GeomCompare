@@ -1,6 +1,13 @@
 m2r2
+numpy
+psycopg2
+pyproj
+rtree
+shapely
 # Requirements file for ReadTheDocs, check .readthedocs.yml.
 # To build the module reference correctly, make sure every external package
 # under `install_requires` in `setup.cfg` is also listed here!
-sphinx>=3.2.1
+sphinx>=4.2.0
+sphinx-autodoc-typehints
+sphinx-toolbox
 sphinx_rtd_theme

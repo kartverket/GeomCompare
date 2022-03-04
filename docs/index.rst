@@ -12,8 +12,7 @@ Contents
 
    Overview <readme>
    Getting Started <gettingstarted>
-   API <api>
-   Contributions & Help <contributing>
+ .. Contributions & Help <contributing>
    License <license>
    Authors <authors>
    Changelog <changelog>
