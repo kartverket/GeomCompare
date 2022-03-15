@@ -12,7 +12,7 @@ Input/Output
 Load a geometry dataset from disk
 """""""""""""""""""""""""""""""""
 
-**Load geometrical/geographical features from a Shapefile:**
+**Load geometrical features from a Shapefile:**
 
 .. code-block:: python
 
@@ -21,7 +21,7 @@ Load a geometry dataset from disk
    filename = "/path/to/my/file.shp"
 
    # The names of supported OGR/GDAL drivers for opening files with
-   # geometrical/geographical features are listed in
+   # geometrical features are listed in
    # https://gdal.org/drivers/vector/index.html
    driver_name = "ESRI Shapefile" # driver name for opening shapefiles
 
@@ -34,7 +34,7 @@ Load a geometry dataset from disk
    # store the geometries in a list instead
    geoms_list = list(geoms) # now the file is closed
 
-**Filtering the extracted geometrical/geographical features:**
+**Filtering the extracted geometrical features:**
 
 .. code-block:: python
 
@@ -43,16 +43,15 @@ Load a geometry dataset from disk
    filename = "/path/to/my/file.json"
    driver_name = "GeoJSON"
 
-   # Extract only geometrical/geographical features from the layer
-   # "my_lyr"
+   # Extract only geometrical features from the layer "my_lyr"
    geoms_my_lyr = extract_geoms_from_file(
        filename=filename,
        driver_name=driver_name,
        layers=["my_lyr"],
    )
 
-   # Extract only the first 10 geometrical/geographical features from
-   # the layer "my_lyr"
+   # Extract only the first 10 geometrical features from the layer
+   # "my_lyr"
    lyr_filter = LayerFilter(fids=list(range(10)))
    geoms_my_lyr_10 = extract_geoms_from_file(
        filename=filename,
@@ -151,7 +150,8 @@ Write a geometry dataset to disk
    have different geometry types. If the features have different
    geometry types, you can still group them into multiple datasets of
    homogeneous geometry type, and write these datasets to the same
-   file on different layers, if the data format supports it, as shown below.
+   file on different layers, if the data format supports it, as shown
+   below.
 
 **Write a list of geometrical features to Shapefile:**
 

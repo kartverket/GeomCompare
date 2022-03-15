@@ -224,7 +224,7 @@ def fetch_geoms_from_pg(
     Yields
     ------
     shapely.geometry.base.BaseGeometry
-        Geometrical/Geographical features from the PostGIS database.
+        Geometrical features from the PostGIS database.
 
     Raises
     ------
@@ -386,7 +386,7 @@ def extract_geoms_from_file(
     Yields
     ------
     `shapely.geometry.base.BaseGeometry`
-        Geometrical/Geographical features from the file.
+        Geometrical features from the file.
 
     Raises
     ------
@@ -484,7 +484,7 @@ def write_geoms_to_file(
     driver_name : `str`
         Name of the GDAL/OGR driver to use for writing the file.
     geoms_iter : iterable of `shapely.geometry.base.BaseGeometry`
-        Iterable of the geometrical/geographical features to write.
+        Iterable of the geometrical features to write.
     geoms_epsg : `int`, optional
         EPSG code of the input geometrical features. If the Spatial
         Reference System of the input geometrical features is
