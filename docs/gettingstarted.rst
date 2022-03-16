@@ -198,6 +198,123 @@ Write a geometry dataset to disk
 
 .. note::
    If the ``geoms_epsg`` parameter is given, and the layer where the
-   geometrical/geographical features are to be written on has a
-   different Spatial Reference System, the geometries' coordinates
-   will be re-projected on-the-fly.
+   geometrical features are to be written on has a different Spatial
+   Reference System, the geometries' coordinates will be re-projected
+   on-the-fly.
+
+
+Comparing datasets
+------------------
+
+*GeomCompare* provides three main classes that can be used to compare
+two datasets of geometrical features:
+
+- :py:class:`SQLiteGeomRefDB`
+- :py:class:`PostGISGeomRefDB`
+- :py:class:`RtreeGeomRefDB`
+
+These classes present an interface to store or give access to a
+*reference* dataset/database of geometrical features, to which a
+*test* dataset can be compared. Instances of these classes present a
+similar API, but they all have pros and cons when compared against
+each others. Presently, the class :py:class:`SQLiteGeomRefDB` gives
+more flexibility to the user and will therefore be used in the
+following examples.
+
+Comparison of two geometries
+""""""""""""""""""""""""""""
+
+The main classes provided by *GeomCompare* delegates the comparison of
+two geometrical features to an external function. This can be a
+user-defined function, or one of the few comparison functions provided
+by *GeomCompare*. These functions' signature must match the following
+template:
+
+``comparison_function(gtest, gref) -> bool``
+
+where the first positional argument ``gtest`` is the *test* geometry
+(:ref:`shapely geometrical object <shapely:objects>`), and where the
+second positional argument ``gref`` is the *reference* geometry. If
+the comparison function finds that the input geometries are similar,
+it must return ``True``. It must return ``False`` for different
+geometries.
+
+.. code-block:: python
+
+   from shapely.geometry import Polygon
+
+   from geomcompare.comparefunc import polygons_area_match
+
+   # The dispatch function "polygons_area_match" is not itself a
+   # comparison function, but it returns comparison functions with the
+   # right signature instead. The way the returned function compare
+   # two geometries depends on the values passed as arguments to
+   # "polygons_area_match".
+
+   # Use Intersection over Union metric for comparison
+   strategy = "IoU"
+   threshold = 0.7
+   comparison_f = polygons_area_match(strategy, threshold)
+
+   # Reference polygon
+   poly_ref = Polygon(((0, 0), (1, 0), (1, 1), (0, 1)))
+
+   # Test polygons
+   poly_test1 = Polygon(((0, 0), (0.5, 0), (0.5, 1), (0, 1)))
+   poly_test2 = Polygon(((0, 0), (0.75, 0), (0.75, 1), (0, 1)))
+
+   comparison_f(poly_test1, poly_ref) # returns False: IoU < 0.7
+   comparison_f(poly_test1, poly_ref) # returns True: IoU >= 0.7
+
+The comparison function will be passed as argument to one of the
+methods of the main classes' instances to compare *test* and
+*reference* geometries.
+
+Managing a reference dataset
+""""""""""""""""""""""""""""
+
+The following code examples shows how to manage a *reference* geometry
+dataset using the :py:class:`SQLiteGeomRefDB` class. Internally,
+instances of this class uses a SQLite database (with spatialite
+extension) to store the *reference* geometries.
+
+**Initialize a SQLiteGeomRefDB instance and populate it with
+geometries:**
+
+.. code-block:: python
+
+   from geomcompare import SQLiteGeomRefDB
+
+   # Start with an empty instance.
+   geomref = SQLiteGeomRefDB()
+
+   filename = "/path/to/reference/dataset.shp"
+   driver_name = "ESRI Shapefile" # driver name for opening shapefiles
+
+   # Get an iterator of the reference geometries, let us assume that
+   # the geometries are polygons.
+   ref_polys = extract_geoms_from_file(filename, driver_name)
+
+   # Add the geometries to the SQLiteGeomRefDB instance.
+   geomref.add_geometries(
+       ref_polys,
+       geom_type="Polygon",
+       geoms_epsg=25833,
+       geoms_tab_name="my_ref_polys",
+   )
+
+The code above instantiates a
+:py:class:`~geomcompare.geomrefdb.SQLiteGeomRefDB` object, which
+internally creates a SQLite database in *RAM*, and adds *reference*
+polygons from a *shapefile* to a table named "my_ref_polys". As we
+have created a new database, the ``geom_type`` and parameter of
+:py:meth:`~geomcompare.geomrefdb.SQLiteGeomRefDB.add_geometries` must
+be passed an argument, since the geometry type is required by
+*spatialite* when creating a new geometry column in a table of the
+database. If the
+:py:attr:`~geomcompare.geomrefdb.SQLiteGeomRefDB.default_epsg` was not
+set (either when creating the instance or at least before adding the
+new geometries), ``geoms_epsg`` (identifying the spatial reference
+system of the input *reference* geometries) must also be given when
+calling
+:py:meth:`~geomcompare.geomrefdb.SQLiteGeomRefDB.add_geometries`.
