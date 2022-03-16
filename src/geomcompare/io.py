@@ -9,7 +9,7 @@ import sys
 # from collections import defaultdict
 from collections.abc import Iterable, Sequence, Generator
 from numbers import Integral
-from typing import Literal, NamedTuple, Optional, TypeVar
+from typing import Literal, NamedTuple, Optional, Union
 
 try:
     from osgeo import ogr, osr
@@ -299,7 +299,7 @@ def _get_layer_epsg(layer) -> Optional[int]:
 
 
 #: Type for identifying layers.
-LayerID = TypeVar("LayerID", str, int)
+LayerID = Union[str, int]
 
 
 class LayerFilter(NamedTuple):
