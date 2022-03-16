@@ -1,3 +1,5 @@
+.. _user-guide:
+
 ===============
 Getting started
 ===============
@@ -144,14 +146,13 @@ Write a geometry dataset to disk
 
 .. warning::
    When writing to disk, *GeomCompare* assumes that all geometrical
-   features have the same geometry
-   type. :py:func:`write_geoms_to_file` will not check for geometry
-   type homogeneity and will instead throw an error if the features
-   have different geometry types. If the features have different
-   geometry types, you can still group them into multiple datasets of
-   homogeneous geometry type, and write these datasets to the same
-   file on different layers, if the data format supports it, as shown
-   below.
+   features have the same geometry type. :func:`.write_geoms_to_file`
+   will not check for geometry type homogeneity and will instead throw
+   an error if the features have different geometry types. If the
+   features have different geometry types, you can still group them
+   into multiple datasets of homogeneous geometry type, and write
+   these datasets to the same file on different layers, if the data
+   format supports it, as shown below.
 
 **Write a list of geometrical features to Shapefile:**
 
@@ -209,17 +210,17 @@ Comparing datasets
 *GeomCompare* provides three main classes that can be used to compare
 two datasets of geometrical features:
 
-- :py:class:`SQLiteGeomRefDB`
-- :py:class:`PostGISGeomRefDB`
-- :py:class:`RtreeGeomRefDB`
+- :class:`.SQLiteGeomRefDB`
+- :class:`.PostGISGeomRefDB`
+- :class:`.RtreeGeomRefDB`
 
 These classes present an interface to store or give access to a
 *reference* dataset/database of geometrical features, to which a
 *test* dataset can be compared. Instances of these classes present a
 similar API, but they all have pros and cons when compared against
-each others. Presently, the class :py:class:`SQLiteGeomRefDB` gives
-more flexibility to the user and will therefore be used in the
-following examples.
+each others. Presently, the class :class:`.SQLiteGeomRefDB` gives more
+flexibility to the user and will therefore be used in the following
+examples.
 
 Comparison of two geometries
 """"""""""""""""""""""""""""
@@ -274,7 +275,7 @@ Managing a reference dataset
 """"""""""""""""""""""""""""
 
 The following code examples shows how to manage a *reference* geometry
-dataset using the :py:class:`SQLiteGeomRefDB` class. Internally,
+dataset using the :class:`.SQLiteGeomRefDB` class. Internally,
 instances of this class uses a SQLite database (with spatialite
 extension) to store the *reference* geometries.
 
@@ -303,18 +304,15 @@ geometries:**
        geoms_tab_name="my_ref_polys",
    )
 
-The code above instantiates a
-:py:class:`~geomcompare.geomrefdb.SQLiteGeomRefDB` object, which
+The code above instantiates a :class:`.SQLiteGeomRefDB` object, which
 internally creates a SQLite database in *RAM*, and adds *reference*
 polygons from a *shapefile* to a table named "my_ref_polys". As we
 have created a new database, the ``geom_type`` and parameter of
-:py:meth:`~geomcompare.geomrefdb.SQLiteGeomRefDB.add_geometries` must
-be passed an argument, since the geometry type is required by
-*spatialite* when creating a new geometry column in a table of the
-database. If the
-:py:attr:`~geomcompare.geomrefdb.SQLiteGeomRefDB.default_epsg` was not
-set (either when creating the instance or at least before adding the
-new geometries), ``geoms_epsg`` (identifying the spatial reference
-system of the input *reference* geometries) must also be given when
-calling
-:py:meth:`~geomcompare.geomrefdb.SQLiteGeomRefDB.add_geometries`.
+:meth:`~.SQLiteGeomRefDB.add_geometries` must be passed an argument,
+since the geometry type is required by *spatialite* when creating a
+new geometry column in a table of the database. If the
+:attr:`~.SQLiteGeomRefDB.default_epsg` was not set (either when
+creating the instance or at least before adding the new geometries),
+``geoms_epsg`` (identifying the spatial reference system of the input
+*reference* geometries) must also be given when calling
+:meth:`~.SQLiteGeomRefDB.add_geometries`.
