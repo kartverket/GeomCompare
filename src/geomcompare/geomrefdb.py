@@ -17,13 +17,12 @@ import psycopg2
 import pyproj
 import rtree
 import shapely.ops
-from shapely.geometry.base import BaseGeometry
 from pyproj.exceptions import CRSError
 from shapely import speedups, wkb
 
 from .comparefunc import geoms_always_match
 from .geomrefdb_abc import GeomRefDB
-from .geomutils import geom_type_mapping, get_transform_func, to_2D, unchanged_geom
+from .geomutils import geom_type_mapping, get_transform_func, to_2D, unchanged_geom, GeomObject
 from .io import _setup_logger, _update_logger, GeometryIterable
 from .misc import SharedIterator, split_iter_to_lists
 
@@ -276,7 +275,7 @@ class RtreeGeomRefDB(GeomRefDB):
                     yield ref_geom
         logger.info("Done searching missing geometries.")
 
-#: Geometry types supported by the :py:class:`SQLiteGeomRefDB` class.
+#: Geometry types supported by the `SQLiteGeomRefDB` class.
 SUPPORTED_GEOM_TYPE = Literal[
     "Point",
     "LineString",
@@ -290,41 +289,41 @@ SUPPORTED_GEOM_TYPE = Literal[
 class SQLiteGeomRefDB(GeomRefDB):
     """Concrete implementation of the GeomRefDB ABC using SQLite.
 
-    SQLiteGeomRefDB is a concrete implementation of the interface defined
-    by the GeomRefDB abstract base class. It enables to load an existing
-    (or create a new) SQLite database, where geometry datasets can be
-    stored and can be compared (based on geometry similarity functions)
-    with other geometrical features from an external dataset. Instances of
-    this class can handle simultaneously multiple reference datasets, with
-    various geometry types (see :py:attr:`supported_geom_types`) and
-    spatial reference systems.
+    SQLiteGeomRefDB is a concrete implementation of the interface
+    defined by the GeomRefDB abstract base class. It enables to load
+    an existing (or create a new) SQLite database, where geometry
+    datasets can be stored and can be compared (based on geometry
+    similarity functions) with other geometrical features from an
+    external dataset. Instances of this class can handle
+    simultaneously multiple reference datasets, with various geometry
+    types (see :attr:`supported_geom_types`) and spatial reference
+    systems.
 
     Parameters
     ----------
     filename : `str`, optional
         Path to an existing spatialite database.
     default_epsg : `int`, optional
-        Default EPSG code of the geometrical/geographical features that
-        will be added to the database. If specified, the EPSG code will be
-        default value of the ``geoms_epsg`` parameter for any subsequent
-        call of the :py:meth:`add_geometries` method.
-    geoms_iter : iterable of `shapely.geometry.base.BaseGeometry`, optional
-        Iterable of the geometrical/geographical features to add to this
-        :py:class:`SQLiteGeomRefDB` instance. Such features can also be
-        added later to the class instance with the
-        :py:meth:àdd_geometries`.
+        Default EPSG code of the geometrical features that will be
+        added to the database. If specified, the EPSG code will be
+        default value of the ``geoms_epsg`` parameter for any
+        subsequent call of the :meth:`add_geometries` method.
+    geoms_iter : iterable of `.GeomObject`, optional
+        Iterable of the geometrical features to add to this
+        `SQLiteGeomRefDB` instance. Such features can also be added
+        later to the class instance with the :meth:`add_geometries`
+        method.
     geoms_tab_name : `str`, optional
-        Name of the table where the geometrical/geographical features are
-        to be stored. If the ``geoms_iter`` parameter is not given,
+        Name of the table where the geometrical features are to be
+        stored. If the ``geoms_iter`` parameter is not given,
         ``geoms_tab_name`` will be ignored.
-    geom_type : :py:const:`SUPPORTED_GEOM_TYPE`, optional
-        Geometry type of the geometrical/geographical features passed as
-        argument to the ``geoms_iter`` parameter.
+    geom_type : `SUPPORTED_GEOM_TYPE`, optional
+        Geometry type of the geometrical features passed as argument
+        to the ``geoms_iter`` parameter.
     geoms_epsg : `int`, optional
-        EPSG code of the geometrical/geographical features passed as
-        argument to the ``geoms_iter`` parameter. If specified, it
-        overrides the ``default_epsg`` parameter during the instance
-        construction.
+        EPSG code of the geometrical features passed as argument to
+        the ``geoms_iter`` parameter. If specified, it overrides the
+        ``default_epsg`` parameter during the instance construction.
     in_ram : bool, default: ``True``
         Set to ``True`` to create/load the database in RAM for faster
         access. Set to ``False`` for larger-than-RAM databases.
@@ -453,8 +452,8 @@ class SQLiteGeomRefDB(GeomRefDB):
     @classmethod
     @property
     def supported_geom_types(cls) -> list[SUPPORTED_GEOM_TYPE]:
-        """`list` of supported geometry types: Types supported by the
-        :py:class:`SQLiteGeomRefDB`.
+        """`list` of supported geometry types: Types supported by
+        `SQLiteGeomRefDB`.
         """
         return [
             "Point",
@@ -482,8 +481,8 @@ class SQLiteGeomRefDB(GeomRefDB):
 
     @property
     def default_epsg(self) -> int:
-        """Default EPSG code of the geometrical/geographical features
-        that are added to the database.
+        """Default EPSG code of the geometrical features that are
+        added to the database.
         """
         return self._default_epsg
 
@@ -539,15 +538,15 @@ class SQLiteGeomRefDB(GeomRefDB):
     def save_db(self, filename: str, overwrite: bool = True) -> None:
         """Save the internal SQLite database to disk.
 
-        The function saves the internal SQLite database, together with all
-        the geometrical/geographical features added with
-        :py:meth:`add_geometries`, to disk. The path of the resulting
-        output file can later be passed to the ``filename`` argument of the
-        :py:class:`SQLiteGeomRefDB` class' constructor to load the saved
-        database with all its features. This function is useful only to
-        save loaded-in-RAM databases, as the geometrical/geographical
-        features added to a :py:class:`SQLiteGeomRefDB` instance, with an
-        opened connections to databases that reside on disk, will be saved
+        The function saves the internal SQLite database, together with
+        all the geometrical features added with
+        :meth:`add_geometries`, to disk. The path of the resulting
+        output file can later be passed to the ``filename`` argument
+        of the `SQLiteGeomRefDB` class' constructor to load the saved
+        database with all its features. This function is useful only
+        to save loaded-in-RAM databases, as the geometrical features
+        added to a :class:`SQLiteGeomRefDB` instance, with an opened
+        connections to databases that reside on disk, will be saved
         automatically even after the instance destruction.
 
         Parameters
@@ -587,38 +586,38 @@ class SQLiteGeomRefDB(GeomRefDB):
 
         The function adds geometrical features to the internal SQLite
         database, which can then be used as a "reference dataset" when
-        running other public methods of the :py:class:`SQLiteGeomRefDB`
+        running other public methods of the `SQLiteGeomRefDB`
         instance.
 
         Parameters
         ----------
-        geoms_iter : iterable of `shapely.geometry.base.BaseGeometry`
-            Iterable of the geometrical/geographical features to add to
-            this :py:class:`SQLiteGeomRefDB` instance.
-        geom_type : :py:const:`SUPPORTED_GEOM_TYPE`, optional
-            Geometry type of the input geometrical/geographical
-            features. If the ``geom_type`` is not specified by the user,
-            the function will assume that the input features have the same
-            geometry type as the features already stored in the destination
+        geoms_iter : iterable of `.GeomObject`
+            Iterable of the geometrical features to add to
+            this `SQLiteGeomRefDB` instance.
+        geom_type : `SUPPORTED_GEOM_TYPE`, optional
+            Geometry type of the input geometrical features. If the
+            ``geom_type`` is not specified by the user, the function
+            will assume that the input features have the same geometry
+            type as the features already stored in the destination
             table.
         geoms_epsg : `int`, optional
-            EPSG code of the input geometrical/geographical features. If
-            the ``geoms_epsg`` is not specified by the user, the function
-            will assume that the input features are in the same spatial
-            reference system as the features already stored in the
-            destination table. Also, if the input features are to be stored
-            in a new table of the database and the ``geoms_epsg`` is
-            omitted, the :py:class:`SSQLiteGeomRefDB` instance will use the
-            EPSG code stored in the :py:attr:`default_epsg` attribute (if
-            set).
+            EPSG code of the input geometrical features. If the
+            ``geoms_epsg`` is not specified by the user, the function
+            will assume that the input features are in the same
+            spatial reference system as the features already stored in
+            the destination table. Also, if the input features are to
+            be stored in a new table of the database and the
+            ``geoms_epsg`` is omitted, the `SSQLiteGeomRefDB` instance
+            will use the EPSG code stored in the :attr:`default_epsg`
+            attribute (if set).
         geoms_tab_name : `str`, optional
-            Name of the table where the input geometrical/geographical
-            features are to be stored in the internal SQLite database. If
-            no argument is passed to the ``geoms_tab_name`` parameter, the
-            function will try to store the input geometrical/geographical
+            Name of the table where the input geometrical features are
+            to be stored in the internal SQLite database. If no
+            argument is passed to the ``geoms_tab_name`` parameter,
+            the function will try to store the input geometrical
             features into a table named *default_table*. The
-            *default_table* table will be created if it does not already
-            exist in the database.
+            *default_table* table will be created if it does not
+            already exist in the database.
 
         Raises
         ------
@@ -627,8 +626,8 @@ class SQLiteGeomRefDB(GeomRefDB):
             database/table.
         ValueError
             If ``geoms_epsg`` is not specified, in the case of a new
-            database/table and if the :py:attr:`default_epsg` attribute is
-            not set.
+            database/table and if the :attr:`default_epsg` attribute
+            is not set.
         ValueError
             If the argument passed to the ``geom_type`` parameter does not
             match the geometry type of the features already stored in the
@@ -723,9 +722,9 @@ class SQLiteGeomRefDB(GeomRefDB):
     ) -> Optional[dict]:
         """Get information on features stored in the internal SQLite database.
 
-        Get information on the geometrical/geographical features such as
-        the name of the table(s) where they are stored, their geometry
-        type(s), spatial reference system(s) and the number of features per
+        Get information on the geometrical features such as the name
+        of the table(s) where they are stored, their geometry type(s),
+        spatial reference system(s) and the number of features per
         table. This information can be returned as `dict` instance, or
         printed to *stdout*.
 
@@ -869,14 +868,15 @@ class SQLiteGeomRefDB(GeomRefDB):
         query,
         query_kwargs,
         matching_geoms=True,
-    ) -> Generator[BaseGeometry]:
+    ) -> Generator[GeomObject]:
         """Yield (non-)matching features resulting from the SQL query.
 
         Function generator that formats a SQL query template (from
-        :py:method:`_get_spatial_query`), and executes the resulting query
-        for each input feature. The feature(s) resulting from the queries
-        is/are yielded by the function, depending on whether its/their
-        geometries match the geometry of the input features or not.
+        :meth:`_get_spatial_query`), and executes the resulting query
+        for each input feature. The feature(s) resulting from the
+        queries is/are yielded by the function, depending on whether
+        its/their geometries match the geometry of the input features
+        or not.
         """
         cursor = self._conn.cursor()
         if matching_geoms:
@@ -901,36 +901,36 @@ class SQLiteGeomRefDB(GeomRefDB):
     def true_positives(
         self,
         geoms_iter: GeometryIterable,
-        aoi_geom: Optional[BaseGeometry] = None,
+        aoi_geom: Optional[GeomObject] = None,
         geoms_epsg: Optional[int] = None,
         geoms_tab_name: Optional[str] = None,
-        geoms_match: Callable[[BaseGeometry, BaseGeometry], bool] = None,
-        get_search_frame: Callable[[BaseGeometry], BaseGeometry] = None,
+        geoms_match: Callable[[GeomObject, GeomObject], bool] = None,
+        get_search_frame: Callable[[GeomObject], GeomObject] = None,
         ncores: Optional[int] = None,
-    ) -> Generator[BaseGeometry]:  # , **kwargs):
+    ) -> Generator[GeomObject]:  # , **kwargs):
         """Identidy *matching* **input** geometries.
 
-        The function takes as input geometrical/geographical features, and
-        searches for *reference features* in one table of the internal
-        database which geometries are considered to *match* that of the
-        *input features*. All *input features* that have a geometry that
-        *matches* the geometry of at least one of the *reference features*
-        will be yielded back by the function.
+        The function takes as input geometrical features, and searches
+        for *reference features* in one table of the internal database
+        which geometries are considered to *match* that of the *input
+        features*. All *input features* that have a geometry that
+        *matches* the geometry of at least one of the *reference
+        features* will be yielded back by the function.
 
         Parameters
         ----------
-        geoms_iter : iterable of `shapely.geometry.base.BaseGeometry`
-            Iterable of input geometrical/geographical features to compare
-            to the features of the internal SQLite database.
-        aoi_geom : `shapely.geometry.base.BaseGeometry`, optional
+        geoms_iter : iterable of `.GeomObject`
+            Iterable of input geometrical features to compare to the
+            features of the internal SQLite database.
+        aoi_geom : `.GeomObject`, optional
             *Area of interest*, within which the database's features must
             lie.
         geoms_epsg : `int`, optional
-            EPSG code of the input geometrical/geographical features
-            (including ``aoi_geom`` if specified). If the ``geoms_epsg`` is
-            not specified by the user, the function will assume that the
-            *input features* are in the same spatial reference system as
-            the *reference features*.
+            EPSG code of the input geometrical features (including
+            ``aoi_geom`` if specified). If the ``geoms_epsg`` is not
+            specified by the user, the function will assume that the
+            *input features* are in the same spatial reference system
+            as the *reference features*.
         geoms_tab_name : `str`, optional
             Name of the table where database's features that will be used
             as reference are stored. If no argument is passed to the
@@ -939,40 +939,38 @@ class SQLiteGeomRefDB(GeomRefDB):
         geoms_match : `callable`, optional
             Comparison function that takes two positional arguments:
 
-            - ``gtest``: *input* geometry
-              (`shapely.geometry.base.BaseGeometry`)
-            - ``gref``: *reference* geometry
-              (`shapely.geometry.base.BaseGeometry`)
+            - ``gtest``: *input* geometry (`.GeomObject`)
+            - ``gref``: *reference* geometry (`.GeomObject`)
 
-            The function returns ``True`` if it finds that both geometries
-            *match*, else returns ``False``. If this parameter is omitted,
-            the *input* geometrical/geographical feature will always be
-            considered as a *match* in the case where its *search frame*
-            (see ``get_search_frame`` parameter) interesects with one of
-            the feature from the database's table.
+            The function returns ``True`` if it finds that both
+            geometries *match*, else returns ``False``. If this
+            parameter is omitted, the *input* geometrical feature will
+            always be considered as a *match* in the case where its
+            *search frame* (see ``get_search_frame`` parameter)
+            interesects with one of the feature from the database's
+            table.
         get_search_frame : `callable`, optional
             Function that takes as single argument an *input* geometry
-            (`shapely.geometry.base.BaseGeometry`) and returns its *search
-            frame* (`shapely.geometry.base.BaseGeometry`). If this
-            parameter is omitted, the *search frame* will be the same as
-            the *input* geometry.
+            (`.GeomObject`) and returns its *search frame*
+            (`.GeomObject`). If this parameter is omitted, the *search
+            frame* will be the same as the *input* geometry.
         ncores : `int`, optional
             Number of cores to use for running the function. If
             unspecified, the function will run in a single process
 
         Yields
         ------
-        `shapely.geometry.base.BaseGeometry`
-            *Matching input* geometrical/geographical features.
+        `.GeomObject`
+            *Matching input* geometrical features.
 
         Notes
         -----
-        If the *spatial reference system* of the *input*
-        geometrical/geographical features is different from that of the
-        database's features, the *input features*' coordinates are
-        reprojected on-the-fly, before being compared to features stored in
-        the database. If an *input feature* is considered to be a *match*,
-        it is yielded back unchanged (its coordinates in the original
+        If the *spatial reference system* of the *input* geometrical
+        features is different from that of the database's features,
+        the *input features*' coordinates are reprojected on-the-fly,
+        before being compared to features stored in the database. If
+        an *input feature* is considered to be a *match*, it is
+        yielded back unchanged (its coordinates in the original
         *spatial reference system*).
         """
         self.logger.info("Searching true positive geometries...")
@@ -1061,36 +1059,36 @@ class SQLiteGeomRefDB(GeomRefDB):
     def false_positives(
         self,
         geoms_iter: GeometryIterable,
-        aoi_geom: Optional[BaseGeometry] = None,
+        aoi_geom: Optional[GeomObject] = None,
         geoms_epsg: Optional[int] = None,
         geoms_tab_name: Optional[str] = None,
-        geoms_match: Callable[[BaseGeometry, BaseGeometry], bool] = None,
-        get_search_frame: Callable[[BaseGeometry], BaseGeometry] = None,
+        geoms_match: Callable[[GeomObject, GeomObject], bool] = None,
+        get_search_frame: Callable[[GeomObject], GeomObject] = None,
         ncores: Optional[int] = None,
-    ) -> Generator[BaseGeometry]:  # , **kwargs):
+    ) -> Generator[GeomObject]:  # , **kwargs):
         """Identify *non-matching* **input** geometries.
 
-        The function takes as input geometrical/geographical features, and
-        searches for *reference features* in one table of the internal
-        database which geometries are considered to *match* that of the
-        *input features*. All *input features* that **DO NOT** have a
-        geometry that matches the geometry of any *reference features* will
-        be yielded back by the function.
+        The function takes as input geometrical features, and searches
+        for *reference features* in one table of the internal database
+        which geometries are considered to *match* that of the *input
+        features*. All *input features* that **DO NOT** have a
+        geometry that matches the geometry of any *reference features*
+        will be yielded back by the function.
 
         Parameters
         ----------
-        geoms_iter : iterable of `shapely.geometry.base.BaseGeometry`
-            Iterable of input geometrical/geographical features to compare
-            to the features of the internal SQLite database.
-        aoi_geom : `shapely.geometry.base.BaseGeometry`, optional
+        geoms_iter : iterable of `.GeomObject`
+            Iterable of input geometrical features to compare to the
+            features of the internal SQLite database.
+        aoi_geom : `.GeomObject`, optional
             *Area of interest*, within which the database's features must
             lie.
         geoms_epsg : `int`, optional
-            EPSG code of the input geometrical/geographical features
-            (including ``aoi_geom`` if specified). If the ``geoms_epsg`` is
-            not specified by the user, the function will assume that the
-            *input features* are in the same spatial reference system as
-            the *reference features*.
+            EPSG code of the input geometrical features (including
+            ``aoi_geom`` if specified). If the ``geoms_epsg`` is not
+            specified by the user, the function will assume that the
+            *input features* are in the same spatial reference system
+            as the *reference features*.
         geoms_tab_name : `str`, optional
             Name of the table where database's features that will be used
             as reference are stored. If no argument is passed to the
@@ -1099,41 +1097,39 @@ class SQLiteGeomRefDB(GeomRefDB):
         geoms_match : `callable`, optional
             Comparison function that takes two positional arguments:
 
-            - ``gtest``: *input* geometry
-              (`shapely.geometry.base.BaseGeometry`)
-            - ``gref``: *reference* geometry
-              (`shapely.geometry.base.BaseGeometry`)
+            - ``gtest``: *input* geometry (`.GeomObject`)
+            - ``gref``: *reference* geometry (`.GeomObject`)
 
-            The function returns ``True`` if it finds that both geometries
-            *match*, else returns ``False``. If this parameter is omitted,
-            the *input* geometrical/geographical feature will always be
-            considered as a *match* in the case where its *search frame*
-            (see ``get_search_frame`` parameter) interesects with one of
-            the features from the database's table.
+            The function returns ``True`` if it finds that both
+            geometries *match*, else returns ``False``. If this
+            parameter is omitted, the *input* geometrical feature will
+            always be considered as a *match* in the case where its
+            *search frame* (see ``get_search_frame`` parameter)
+            interesects with one of the features from the database's
+            table.
         get_search_frame : `callable`, optional
             Function that takes as single argument an *input* geometry
-            (`shapely.geometry.base.BaseGeometry`) and returns its *search
-            frame* (`shapely.geometry.base.BaseGeometry`). If this
-            parameter is omitted, the *search frame* will be the same as
-            the *input* geometry.
+            (`.GeomObject`) and returns its *search frame*
+            (`.GeomObject`). If this parameter is omitted, the *search
+            frame* will be the same as the *input* geometry.
         ncores : `int`, optional
             Number of cores to use for running the function. If
             unspecified, the function will run in a single process
 
         Yields
         ------
-        `shapely.geometry.base.BaseGeometry`
-            *Non-matching input* geometrical/geographical features.
+        `.GeomObject`
+            *Non-matching input* geometrical features.
 
         Notes
         -----
-        If the *spatial reference system* of the *input*
-        geometrical/geographical features is different from that of the
-        database's features, the *input features*' coordinates are
-        reprojected on-the-fly, before being compared to features stored in
-        the database. If an *input feature* is **NOT** considered to be a
-        *match*, it is yielded back unchanged (its coordinates in the
-        original *spatial reference system*).
+        If the *spatial reference system* of the *input* geometrical
+        features is different from that of the database's features,
+        the *input features*' coordinates are reprojected on-the-fly,
+        before being compared to features stored in the database. If
+        an *input feature* is **NOT** considered to be a *match*, it
+        is yielded back unchanged (its coordinates in the original
+        *spatial reference system*).
         """
         self.logger.info("Searching false positive geometries...")
         query_kwargs = dict()
@@ -1222,41 +1218,42 @@ class SQLiteGeomRefDB(GeomRefDB):
         self,
         geoms_iter: GeometryIterable,
         geom_type: Optional[SUPPORTED_GEOM_TYPE] = None,
-        aoi_geom: Optional[BaseGeometry] = None,
+        aoi_geom: Optional[GeomObject] = None,
         geoms_epsg: Optional[int] = None,
         geoms_tab_name: Optional[str] = None,
-        geoms_match: Callable[[BaseGeometry, BaseGeometry], bool] = None,
-        get_search_frame: Callable[[BaseGeometry], BaseGeometry] = None,
+        geoms_match: Callable[[GeomObject, GeomObject], bool] = None,
+        get_search_frame: Callable[[GeomObject], GeomObject] = None,
         ncores: Optional[int] = None,
-    ) -> Generator[BaseGeometry]:  # , **kwargs):
+    ) -> Generator[GeomObject]:  # , **kwargs):
         """Identify (missing) *non-matching* **reference** geometries.
 
-        The function takes as input geometrical/geographical features, and
-        searches for *reference features* in one table of the internal
-        database which geometries are **NOT** considered to *match* the
+        The function takes as input geometrical features, and searches
+        for *reference features* in one table of the internal database
+        which geometries are **NOT** considered to *match* the
         geometry of any feature from the input set. All *reference
-        features* that **DO NOT** have a geometry that *matches* the geometry
-        of any *input features* will be yielded by the function.
+        features* that **DO NOT** have a geometry that *matches* the
+        geometry of any *input features* will be yielded by the
+        function.
 
         Parameters
         ----------
-        geoms_iter : iterable of `shapely.geometry.base.BaseGeometry`
-            Iterable of input geometrical/geographical features to compare
-            to the features of the internal SQLite database.
-        geom_type : :py:const:`SUPPORTED_GEOM_TYPE`, optional
-            Geometry type of the input geometrical/geographical
-            features. If the ``geom_type`` is not specified by the user,
-            the function will assume that the *input features* have the
-            same ``geom_type`` as the *reference features*.
-        aoi_geom : `shapely.geometry.base.BaseGeometry`, optional
+        geoms_iter : iterable of `.GeomObject`
+            Iterable of input geometrical features to compare to the
+            features of the internal SQLite database.
+        geom_type : `SUPPORTED_GEOM_TYPE`, optional
+            Geometry type of the input geometrical features. If the
+            ``geom_type`` is not specified by the user, the function
+            will assume that the *input features* have the same
+            ``geom_type`` as the *reference features*.
+        aoi_geom : `.GeomObject`, optional
             *Area of interest*, within which the database's features must
             lie.
         geoms_epsg : `int`, optional
-            EPSG code of the input geometrical/geographical features
-            (including ``aoi_geom`` if specified). If the ``geoms_epsg`` is
-            not specified by the user, the function will assume that the
-            *input features* are in the same spatial reference system as
-            the *reference features*.
+            EPSG code of the input geometrical features (including
+            ``aoi_geom`` if specified). If the ``geoms_epsg`` is not
+            specified by the user, the function will assume that the
+            *input features* are in the same spatial reference system
+            as the *reference features*.
         geoms_tab_name : `str`, optional
             Name of the table where database's features that will be used
             as reference are stored. If no argument is passed to the
@@ -1265,39 +1262,36 @@ class SQLiteGeomRefDB(GeomRefDB):
         geoms_match : `callable`, optional
             Comparison function that takes two positional arguments:
 
-            - ``gtest``: *input* geometry
-              (`shapely.geometry.base.BaseGeometry`)
-            - ``gref``: *reference* geometry
-              (`shapely.geometry.base.BaseGeometry`)
+            - ``gtest``: *input* geometry (`.GeomObject`)
+            - ``gref``: *reference* geometry (`.GeomObject`)
 
-            The function returns ``True`` if it finds that both geometries
-            *match*, else returns ``False``. If this parameter is omitted,
-            the *input* geometrical/geographical feature will always be
-            considered as a *match* in the case where its *search frame*
-            (see ``get_search_frame`` parameter) interesects with one of
-            the features from the database's table.
+            The function returns ``True`` if it finds that both
+            geometries *match*, else returns ``False``. If this
+            parameter is omitted, the *input* geometrical feature will
+            always be considered as a *match* in the case where its
+            *search frame* (see ``get_search_frame`` parameter)
+            interesects with one of the features from the database's
+            table.
         get_search_frame : `callable`, optional
             Function that takes as single argument an *input* geometry
-            (`shapely.geometry.base.BaseGeometry`) and returns its *search
-            frame* (`shapely.geometry.base.BaseGeometry`). If this
-            parameter is omitted, the *search frame* will be the same as
-            the *input* geometry.
+            (`.GeomObject`) and returns its *search frame*
+            (`.GeomObject`). If this parameter is omitted, the *search
+            frame* will be the same as the *input* geometry.
         ncores : `int`, optional
             Number of cores to use for running the function. If
             unspecified, the function will run in a single process
 
         Yields
         ------
-        `shapely.geometry.base.BaseGeometry`
-            *Non-matching reference* geometrical/geographical features.
+        `.GeomObject`
+            *Non-matching reference* geometrical features.
 
         Notes
         -----
-        If the *spatial reference system* of the *input*
-        geometrical/geographical features is different from that of the
-        database's features, the *input features*' coordinates are
-        reprojected on-the-fly, before being compared to features stored in
-        the database.
+        If the *spatial reference system* of the *input* geometrical
+        features is different from that of the database's features,
+        the *input features*' coordinates are reprojected on-the-fly,
+        before being compared to features stored in the database.
         """
         self.logger.info("Searching missing geometries...")
         query_kwargs = dict()
@@ -1306,7 +1300,9 @@ class SQLiteGeomRefDB(GeomRefDB):
         db_info = self.db_geom_info()
         tab_info = db_info.get(geoms_tab_name, None)
         if tab_info is None:
-            raise RuntimeError("No {!r} table was found in the database!")
+            raise RuntimeError(
+                f"No {geoms_tab_name!r} table was found in the database!"
+            )
         if geom_type is None:
             self.logger.info(
                 "No geometry type was passed to the 'geom_type' argument. Assuming "
