@@ -28,9 +28,8 @@ from shapely.geometry import (
     Point,
     Polygon,
 )
-from shapely.geometry.base import BaseGeometry
 
-from .geomutils import geom_type_mapping, get_transform_func, unchanged_geom
+from .geomutils import geom_type_mapping, get_transform_func, unchanged_geom, GeomObject
 
 
 def _setup_logger(
@@ -132,7 +131,7 @@ class ConnectionParameters(NamedTuple):
     """Parameters to open a connection to a PostGIS database.
 
     Instances of this class are intended to be used as parameter for
-    the :py:func:`fetch_geoms_from_pg` function.
+    the `fetch_geoms_from_pg` function.
 
     Attributes
     ----------
@@ -163,7 +162,7 @@ class SchemaTableColumn(NamedTuple):
     """Location of a geometry column in a PostGIS database.
 
     Instances of this class are intended to be used as parameter for
-    the :py:func:`fetch_geoms_from_pg` function.
+    the `fetch_geoms_from_pg` function.
 
     Attributes
     ----------
@@ -189,10 +188,10 @@ def fetch_geoms_from_pg(
     conn_params: Optional[ConnectionParameters] = None,
     sql_query: Optional[str] = None,
     geoms_col_loc: Optional[SchemaTableColumn] = None,
-    aoi: Optional[BaseGeometry] = None,
+    aoi: Optional[GeomObject] = None,
     aoi_epsg: Optional[int] = None,
     output_epsg: Optional[int] = None,
-) -> Generator[BaseGeometry]:
+) -> Generator[GeomObject]:
     """Fetch geometrical features from a PostGIS database.
 
     Generator function which connects or uses an existing connection to a
@@ -212,7 +211,7 @@ def fetch_geoms_from_pg(
         SQL query to use to extract geometrical features from the PostGIS database.
     geoms_col_loc : `SchemaTableColumn`, optional
         Geometry column location within the PostGIS database.
-    aoi : `shapely.geometry.base.BaseGeometry`, optional
+    aoi : `.GeomObject`, optional
         *Area of interest*, where the geometrical features lies.
     aoi_epsg : `int`, optional
         EPSG code of the *area of interest* geometry/ies.
@@ -223,7 +222,7 @@ def fetch_geoms_from_pg(
 
     Yields
     ------
-    shapely.geometry.base.BaseGeometry
+    `.GeomObject`
         Geometrical features from the PostGIS database.
 
     Raises
@@ -307,15 +306,15 @@ class LayerFilter(NamedTuple):
     """Filter for extraction of geometrical features from file.
 
     Instances of this class are intended to be used as parameter for
-    the :py:func:`extract_geoms_from_file` function, for filtering and
-    choosing the geometrical features to extract.
+    the `extract_geoms_from_file` function, for filtering and choosing
+    the geometrical features to extract.
 
     Attributes
     ----------
     .. layer_id : `LayerID`, optional
            Name or index of the layer the filter will be applied to. If set
            to `None`, the filter will be applied on all layers.
-    .. aoi : `shapely.geometry.base.BaseGeometry`, optional
+    .. aoi : `.GeomObject`, optional
            *Area of interest*, where the geometrical features lies. All
            features lying outside the *area of interest* will be filtered
            out (not extracted).
@@ -335,10 +334,10 @@ class LayerFilter(NamedTuple):
     #: `None`, the filter will be applied on all layers.
     layer_id: Optional[LayerID] = None
 
-    #: shapely.geometry.base.BaseGeometry, optional: *Area of interest*,
-    #: where the geometrical features lies. All features lying outside
-    #: the *area of interest* will be filtered out (not extracted).
-    aoi: Optional[BaseGeometry] = None
+    #: `.GeomObject`, optional: *Area of interest*, where the
+    #: geometrical features lies. All features lying outside the *area
+    #: of interest* will be filtered out (not extracted).
+    aoi: Optional[GeomObject] = None
 
     #: EPSG code of the *area of interest* geometry/ies. If set to `None`,
     #: the same Spatial Reference System as the layer will be used.
@@ -359,7 +358,7 @@ def extract_geoms_from_file(
     driver_name: str,
     layers: Optional[Sequence[LayerID]] = None,
     layer_filters: Optional[Sequence[LayerFilter]] = None,
-) -> Generator[BaseGeometry]:
+) -> Generator[GeomObject]:
     """Extract geometrical features from a GDAL/OGR-readable file.
 
     Generator function which opens a file located on disk, with one of the
@@ -385,7 +384,7 @@ def extract_geoms_from_file(
 
     Yields
     ------
-    `shapely.geometry.base.BaseGeometry`
+    `.GeomObject`
         Geometrical features from the file.
 
     Raises
@@ -459,7 +458,7 @@ def extract_geoms_from_file(
 
 
 ## Type for specifying an Iterable of geometrical features.
-GeometryIterable = Iterable[BaseGeometry]
+GeometryIterable = Iterable[GeomObject]
 
 
 def write_geoms_to_file(
@@ -483,7 +482,7 @@ def write_geoms_to_file(
         written to.
     driver_name : `str`
         Name of the GDAL/OGR driver to use for writing the file.
-    geoms_iter : iterable of `shapely.geometry.base.BaseGeometry`
+    geoms_iter : iterable of `.GeomObject`
         Iterable of the geometrical features to write.
     geoms_epsg : `int`, optional
         EPSG code of the input geometrical features. If the Spatial
