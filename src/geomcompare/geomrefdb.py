@@ -276,7 +276,7 @@ class RtreeGeomRefDB(GeomRefDB):
         logger.info("Done searching missing geometries.")
 
 #: Geometry types supported by the `SQLiteGeomRefDB` class.
-SUPPORTED_GEOM_TYPE = Literal[
+SpatialiteGeomType = Literal[
     "Point",
     "LineString",
     "Polygon",
@@ -317,7 +317,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         Name of the table where the geometrical features are to be
         stored. If the ``geoms_iter`` parameter is not given,
         ``geoms_tab_name`` will be ignored.
-    geom_type : `SUPPORTED_GEOM_TYPE`, optional
+    geom_type : `SpatialiteGeomType`, optional
         Geometry type of the geometrical features passed as argument
         to the ``geoms_iter`` parameter.
     geoms_epsg : `int`, optional
@@ -355,7 +355,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         default_epsg: Optional[int] = None,
         geoms_iter: Optional[GeometryIterable] = None,
         geoms_tab_name: Optional[str] = None,
-        geom_type: Optional[SUPPORTED_GEOM_TYPE] = None,
+        geom_type: Optional[SpatialiteGeomType] = None,
         geoms_epsg: Optional[int] = None,
         in_ram: bool = True,
         logger: Optional[logging.Logger] = None,
@@ -451,7 +451,7 @@ class SQLiteGeomRefDB(GeomRefDB):
 
     @classmethod
     @property
-    def supported_geom_types(cls) -> list[SUPPORTED_GEOM_TYPE]:
+    def supported_geom_types(cls) -> list[SpatialiteGeomType]:
         """`list` of supported geometry types: Types supported by
         `SQLiteGeomRefDB`.
         """
@@ -578,7 +578,7 @@ class SQLiteGeomRefDB(GeomRefDB):
     def add_geometries(
         self,
         geoms_iter: GeometryIterable,
-        geom_type: Optional[SUPPORTED_GEOM_TYPE] = None,
+        geom_type: Optional[SpatialiteGeomType] = None,
         geoms_epsg: Optional[int] = None,
         geoms_tab_name: Optional[str] = None,
     ):
@@ -594,7 +594,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         geoms_iter : iterable of `.GeomObject`
             Iterable of the geometrical features to add to
             this `SQLiteGeomRefDB` instance.
-        geom_type : `SUPPORTED_GEOM_TYPE`, optional
+        geom_type : `SpatialiteGeomType`, optional
             Geometry type of the input geometrical features. If the
             ``geom_type`` is not specified by the user, the function
             will assume that the input features have the same geometry
@@ -1217,7 +1217,7 @@ class SQLiteGeomRefDB(GeomRefDB):
     def missing_geometries(
         self,
         geoms_iter: GeometryIterable,
-        geom_type: Optional[SUPPORTED_GEOM_TYPE] = None,
+        geom_type: Optional[SpatialiteGeomType] = None,
         aoi_geom: Optional[GeomObject] = None,
         geoms_epsg: Optional[int] = None,
         geoms_tab_name: Optional[str] = None,
@@ -1240,7 +1240,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         geoms_iter : iterable of `.GeomObject`
             Iterable of input geometrical features to compare to the
             features of the internal SQLite database.
-        geom_type : `SUPPORTED_GEOM_TYPE`, optional
+        geom_type : `SpatialiteGeomType`, optional
             Geometry type of the input geometrical features. If the
             ``geom_type`` is not specified by the user, the function
             will assume that the *input features* have the same
