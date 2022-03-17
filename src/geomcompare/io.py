@@ -29,7 +29,7 @@ from shapely.geometry import (
     Polygon,
 )
 
-from .geomutils import geom_type_mapping, get_transform_func, unchanged_geom, GeomObject
+from .geomutils import _geom_type_mapping, get_transform_func, _unchanged_geom, GeomObject
 
 
 def _setup_logger(
@@ -535,7 +535,7 @@ def write_geoms_to_file(
     #    if not len(set(g.__class__ for g in geoms_list)) == 1:
     #        raise ValueError("Cannot process input geometries of different types!")
     first_geom = next(geoms_iter)
-    geom_type = geom_type_mapping[first_geom.geom_type]
+    geom_type = _geom_type_mapping[first_geom.geom_type]
     geoms_iter = itertools.chain([first_geom], geoms_iter)
     if not mode in ("update", "overwrite"):
         raise ValueError(
@@ -567,7 +567,7 @@ def _update_geoms_file(
     else:
         layer = "default"
         lyr_obj = ds.GetLayer()
-    transform_geom = unchanged_geom
+    transform_geom = _unchanged_geom
     if lyr_obj is None:
         lyr_obj = ds.CreateLayer(layer, srs=srs, geom_type=geom_type)
         lyr_def = lyr_obj.GetLayerDefn()

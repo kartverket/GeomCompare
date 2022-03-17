@@ -22,9 +22,9 @@ from shapely import speedups, wkb
 
 from .comparefunc import geoms_always_match
 from .geomrefdb_abc import GeomRefDB
-from .geomutils import geom_type_mapping, get_transform_func, to_2D, unchanged_geom, GeomObject
+from .geomutils import _geom_type_mapping, get_transform_func, _to_2D, _unchanged_geom, GeomObject
 from .io import _setup_logger, _update_logger, GeometryIterable
-from .misc import SharedIterator, split_iter_to_lists
+from ._misc import SharedIterator, split_iter_to_lists
 
 
 class PostGISGeomRefDB(GeomRefDB):
@@ -648,7 +648,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         db_info = self.db_geom_info()
         ## Coordinates of input geometries are not transformed by
         ## default. Return the input geometry unchanged.
-        transform_geom = unchanged_geom
+        transform_geom = _unchanged_geom
         cursor = self._conn.cursor()
         if geom_type is not None and not geom_type in self.supported_geom_types:
             raise ValueError(
@@ -712,7 +712,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         for geom in geoms_iter:
             cursor.execute(
                 f"INSERT INTO {geoms_tab_name} (geometry) VALUES "
-                f"(GeomFromText('{transform_geom(to_2D(geom)).wkt}', "
+                f"(GeomFromText('{transform_geom(_to_2D(geom)).wkt}', "
                 f"{geoms_epsg}));"
             )
         self._conn.commit()
@@ -754,7 +754,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         cursor = self._conn.cursor()
         cursor.execute("SELECT * FROM geometry_columns")
         info = {
-            tab[0]: {"geom_type": geom_type_mapping[tab[2]], "srid": tab[4]}
+            tab[0]: {"geom_type": _geom_type_mapping[tab[2]], "srid": tab[4]}
             for tab in cursor.fetchall()
         }
         if count_features:
@@ -881,7 +881,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         cursor = self._conn.cursor()
         if matching_geoms:
             for geom in geoms_iter:
-                geom_reproj = transform_geom(to_2D(geom))
+                geom_reproj = transform_geom(_to_2D(geom))
                 search_frame = get_search_frame(geom_reproj)
                 query_kwargs["geomsfwkt"] = search_frame.wkt
                 cursor.execute(query.format(**query_kwargs))
@@ -889,7 +889,7 @@ class SQLiteGeomRefDB(GeomRefDB):
                     yield geom
         else:
             for geom in geoms_iter:
-                geom_reproj = transform_geom(to_2D(geom))
+                geom_reproj = transform_geom(_to_2D(geom))
                 search_frame = get_search_frame(geom_reproj)
                 query_kwargs["geomsfwkt"] = search_frame.wkt
                 cursor.execute(query.format(**query_kwargs))
@@ -986,10 +986,10 @@ class SQLiteGeomRefDB(GeomRefDB):
             geoms_match = geoms_always_match
         ## Default search frame is the input geometry itself.
         if get_search_frame is None:
-            get_search_frame = unchanged_geom
+            get_search_frame = _unchanged_geom
         ## Coordinates of input geometries are not transformed by
         ## default. Return the input geometry unchanged.
-        transform_geom = unchanged_geom
+        transform_geom = _unchanged_geom
         if geoms_tab_name is None:
             geoms_tab_name = "default_table"
         db_info = self.db_geom_info()
@@ -1144,10 +1144,10 @@ class SQLiteGeomRefDB(GeomRefDB):
             geoms_match = geoms_always_match
         ## Default search frame is the input geometry itself.
         if get_search_frame is None:
-            get_search_frame = unchanged_geom
+            get_search_frame = _unchanged_geom
         ## Coordinates of input geometries are not transformed by
         ## default. Return the input geometry unchanged.
-        transform_geom = unchanged_geom
+        transform_geom = _unchanged_geom
         if geoms_tab_name is None:
             geoms_tab_name = "default_table"
         db_info = self.db_geom_info()
