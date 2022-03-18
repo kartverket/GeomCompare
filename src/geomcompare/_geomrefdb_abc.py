@@ -17,7 +17,7 @@ class GeomRefDB(abc.ABC):
         """ Return an iterable of input geometries that are matching
         geometries of the GeomRefDB instance.
         """
-            
+
 
     @abc.abstractmethod
     def false_positives(self, geoms_iter, geoms_EPSG, same_geoms_func):
@@ -58,7 +58,7 @@ class GeomRefDB(abc.ABC):
                                                             geoms_match=same_geoms_func))
         return recall_score(tp_num, mg_num)
 
-        
+
     def get_precision_score(self, geoms_iter, geoms_EPSG, same_geoms_func):
         if not isinstance(geoms_iter, Sequence):
             geoms_iter = list(geoms_iter)
@@ -77,7 +77,7 @@ class GeomRefDB(abc.ABC):
         except TypeError:
             fp_num = sum(1 for _ in self.false_positives(geoms_iter,
                                                          geoms_epsg=geoms_EPSG,
-                                                         geoms_match=same_geoms_func))            
+                                                         geoms_match=same_geoms_func))
         return precision_score(tp_num, fp_num)
 
 
@@ -135,4 +135,3 @@ class GeomRefDB(abc.ABC):
         results['precision'] = precision_score(tp_num, fp_num)
         results['f1'] = f1_score(tp_num, fp_num, mg_num)
         return results
-            

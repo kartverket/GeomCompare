@@ -21,7 +21,7 @@ from pyproj.exceptions import CRSError
 from shapely import speedups, wkb
 
 from .comparefunc import geoms_always_match
-from .geomrefdb_abc import GeomRefDB
+from ._geomrefdb_abc import GeomRefDB
 from .geomutils import _geom_type_mapping, get_transform_func, _to_2D, _unchanged_geom, GeomObject
 from .io import _setup_logger, _update_logger, GeometryIterable
 from ._misc import SharedIterator, split_iter_to_lists
