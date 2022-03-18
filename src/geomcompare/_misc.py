@@ -52,7 +52,7 @@ class SharedIterator:
             return el
         raise StopIteration()
 
-    
+
     def __iter__(self):
         return self
 
@@ -67,7 +67,7 @@ class SharedIterator:
             for count, el in enumerate(it, 1):
                 self._q.put(el)
         with self._s.get_lock():
-            self._s.value += count           
+            self._s.value += count
 
 
 def split_iter_to_lists(it, nlists):
@@ -75,4 +75,3 @@ def split_iter_to_lists(it, nlists):
     for i,el in enumerate(it):
         lists[i % nlists].append(el)
     return lists
-        
