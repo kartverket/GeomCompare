@@ -1,3 +1,9 @@
+## v0.2.2 (2022-03-18)
+
+### Fix
+
+- **misc.py**: rename misc.py -> _misc.py
+
 ## v0.2.1 (2022-03-17)
 
 ### Refactor
