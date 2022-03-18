@@ -3,7 +3,7 @@
 from shapely.geometry import Point, Polygon
 import pytest
 
-from geomcompare.geomutils import to_2D, unchanged_geom
+from geomcompare.geomutils import to_2D, _unchanged_geom
 
 
 @pytest.fixture
@@ -19,4 +19,4 @@ def test_to_2D(geoms_3D):
 
 
 def test_unchanged_geom(geoms_3D):
-    assert all(g.equals(unchanged_geom(g)) for g in geoms_3D)
+    assert all(g.equals(_unchanged_geom(g)) for g in geoms_3D)
