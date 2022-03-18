@@ -101,4 +101,4 @@ Usage
 
 For guidance on how to use *GeomCompare*, a user guide and API
 documentation are available on the project's
-[homepage](https://geomcompare.readthedocs.io/en/latest/).
+homepage (https://geomcompare.readthedocs.io/en/latest/).
