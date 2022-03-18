@@ -99,6 +99,6 @@ https://docs.docker.com/engine/reference/run/ .
 Usage
 -----
 
-For guidance on how to use *GeomCompare*, see the
-:ref:`geomcompare:user-guide` page and the :doc:`API documentation
-<geomcompare:api/modules>`.
+For guidance on how to use *GeomCompare*, a user guide and API
+documentation are available on the project's
+[homepage](https://geomcompare.readthedocs.io/en/latest/).

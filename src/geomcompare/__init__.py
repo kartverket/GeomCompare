@@ -7,7 +7,7 @@ The *Geomcompare* package provides multiple tools for comparing two
 independant sets of geometrical features.
 
 Documentation for *GeomCompare* is available in the form of docstrings
-provided with the code, as well as on the projects' homepage
+provided with the code, as well as on the project's homepage
 `<https://geomcompare.readthedocs.io/en/latest/>`_.
 
 Available submodules

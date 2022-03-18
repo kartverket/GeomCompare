@@ -35,6 +35,8 @@ except ImportError:
 
 output_dir = os.path.join(__location__, "api")
 module_dir = os.path.join(__location__, "../src/geomcompare")
+# can be added to sphinx-apidoc command line to remove docstring from __init__.py
+# path2init = os.path.join(module_dir, "__init__.py")
 try:
     shutil.rmtree(output_dir)
 except FileNotFoundError:
