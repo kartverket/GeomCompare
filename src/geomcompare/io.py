@@ -208,7 +208,8 @@ def fetch_geoms_from_pg(
     conn_params : `ConnectionParameters`, optional
         Parameters to open a connection to the PostGIS database.
     sql_query : `str`, optional
-        SQL query to use to extract geometrical features from the PostGIS database.
+        SQL query to use to extract geometrical features from the PostGIS
+        database.
     geoms_col_loc : `SchemaTableColumn`, optional
         Geometry column location within the PostGIS database.
     aoi : `.GeomObject`, optional
@@ -217,7 +218,7 @@ def fetch_geoms_from_pg(
         EPSG code of the *area of interest* geometry/ies.
     output_epsg : `int`, optional
         EPSG code of the yielded geometrical features. This parameter can
-        be used to reproject the yielded geometries to a different Spatial
+        be used to transform the yielded geometries to a different Spatial
         Reference System from the one used in the PostGIS database.
 
     Yields

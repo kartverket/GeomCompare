@@ -581,7 +581,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         geom_type: Optional[SpatialiteGeomType] = None,
         geoms_epsg: Optional[int] = None,
         geoms_tab_name: Optional[str] = None,
-    ):
+    ) -> None:
         """Add geometrical features to the internal SQLite database.
 
         The function adds geometrical features to the internal SQLite
@@ -716,6 +716,94 @@ class SQLiteGeomRefDB(GeomRefDB):
                 f"{geoms_epsg}));"
             )
         self._conn.commit()
+
+    def get_geometries(
+        self,
+        aoi_geom: Optional[GeomObject] = None,
+        aoi_epsg: Optional[int] = None,
+        geoms_tab_name: Optional[str] = None,
+        output_epsg: Optional[int] = None,
+    ) -> Generator[GeomObject]:
+        """Get geometrical features from the internal SQLite database.
+
+        Generator function which yields geometrical features stored in
+        the internal database. The user can specify the table, or
+        define a limited area to yield the features from. In addition,
+        the spatial reference system of the output geometries can also
+        be specified.
+
+        Parameters
+        ----------
+        aoi_geom : `.GeomObject`, optional
+            *Area of interest*, where the geometrical features lies.
+        aoi_epsg : `int`, optional
+            EPSG code of the *area of interest* geometry/ies.
+        geoms_tab_name : `str`, optional
+            Name of the table where the geometrical features are
+            stored in the internal SQLite database. If no argument is
+            passed to the ``geoms_tab_name`` parameter, the function
+            will try to yield geometrical features from a table named
+            *default_table*.
+        output_epsg : `int`, optional
+            EPSG code of the yielded geometrical features. This
+            parameter can be used to transform the yielded geometries
+            to a different Spatial Reference System from the one used
+            in the internal database.
+
+        Yields
+        ------
+        `.GeomObject`
+            Geometrical features from the internal SQLite database.
+
+        Raises
+        ------
+        ValueError
+            If ``geoms_tab_name`` is not specified and no table named
+            *default_table* exist in the database.
+        """
+        query_kwargs = dict()
+        ## Coordinates of input geometries are not transformed by
+        ## default. Return the input geometry unchanged.
+        transform_geom = _unchanged_geom
+        if geoms_tab_name is None:
+            geoms_tab_name = "default_table"
+        db_info = self.db_geom_info()
+        tab_info = db_info.get(geoms_tab_name, None)
+        if tab_info is None:
+            raise RuntimeError(f"No {geoms_tab_name!r} table was found in the database!")
+        else:
+            query_kwargs["table"] = geoms_tab_name
+        tab_epsg = tab_info["srid"]
+        ## Coordinates of output geometries are not transformed by
+        ## default. Return the output geometry unchanged.
+        transform_geom = _unchanged_geom
+        if output_epsg is not None:
+            try:
+                output_epsg = int(output_epsg)
+                _ = pyproj.CRS(output_epsg)
+            except (CRSError, ValueError, TypeError):
+                raise ValueError(f"{output_epsg!r} is not a valid EPSG code!")
+            transform_geom = get_transform_func(tab_epsg, output_epsg)
+        if aoi_geom is not None:
+            if aoi_epsg is not None:
+                try:
+                    aoi_epsg = int(aoi_epsg)
+                    _ = pyproj.CRS(aoi_epsg)
+                except (CRSError, ValueError, TypeError):
+                    raise ValueError(f"{aoi_epsg!r} is not a valid EPSG code!")
+                if aoi_epsg != tab_epsg:
+                    transform_aoi = get_transform_func(aoi_epsg, tab_epsg)
+                    aoi_geom = transform_aoi(aoi_geom)
+            query_kwargs["aoiwkt"] = aoi_geom.wkt
+            query_kwargs["epsg"] = tab_epsg
+        query = self._get_spatial_query(
+            spatial_index=aoi_geom is not None,
+            only_within_aoi=aoi_geom is not None,
+        )
+        cursor = self._conn.cursor()
+        cursor.execute(query.format(**query_kwargs))
+        for row in cursor:
+            yield transform_geom(wkb.loads(row[0]))
 
     def db_geom_info(
         self, to_stdout: bool = False, count_features: bool = False
