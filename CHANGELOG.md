@@ -5,13 +5,16 @@
 #### New Features
 
 * (SQLiteGeomRefDB): add the get_geometries method
+
 #### Refactorings
 
 * (comparefunc): rename geoms_always_match -> _geoms_always_match
+
 #### Docs
 
 * change homepage link in README.rst
 * add usage section with link to homepage for GitHub repo
+
 #### Others
 
 * remove commitizen section from pyproject.toml
@@ -27,6 +30,7 @@ Full set of changes: [`v0.2.2...v0.3.0`](https://github.com/kartverket/GeomCompa
 * prefix a few private variables/functions with an underscore
 * Change LayerID from TypeVar to Union.
 * Type for shapely geometrical object and reformatting of docstrings
+
 #### Docs
 
 * update CHANGELOG.md
@@ -36,6 +40,7 @@ Full set of changes: [`v0.2.2...v0.3.0`](https://github.com/kartverket/GeomCompa
 * Add shapely to intersphinx_mapping
 * "geometrical/geographical" -> "geometrical"
 * Fixed table of contents
+
 #### Others
 
 * Add the Dockerfile to the repo.
