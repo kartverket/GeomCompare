@@ -1,3 +1,5 @@
+.. _user-guide:
+
 ===============
 Getting started
 ===============
@@ -12,7 +14,7 @@ Input/Output
 Load a geometry dataset from disk
 """""""""""""""""""""""""""""""""
 
-**Load geometrical/geographical features from a Shapefile:**
+**Load geometrical features from a Shapefile:**
 
 .. code-block:: python
 
@@ -21,7 +23,7 @@ Load a geometry dataset from disk
    filename = "/path/to/my/file.shp"
 
    # The names of supported OGR/GDAL drivers for opening files with
-   # geometrical/geographical features are listed in
+   # geometrical features are listed in
    # https://gdal.org/drivers/vector/index.html
    driver_name = "ESRI Shapefile" # driver name for opening shapefiles
 
@@ -34,7 +36,7 @@ Load a geometry dataset from disk
    # store the geometries in a list instead
    geoms_list = list(geoms) # now the file is closed
 
-**Filtering the extracted geometrical/geographical features:**
+**Filtering the extracted geometrical features:**
 
 .. code-block:: python
 
@@ -43,16 +45,15 @@ Load a geometry dataset from disk
    filename = "/path/to/my/file.json"
    driver_name = "GeoJSON"
 
-   # Extract only geometrical/geographical features from the layer
-   # "my_lyr"
+   # Extract only geometrical features from the layer "my_lyr"
    geoms_my_lyr = extract_geoms_from_file(
        filename=filename,
        driver_name=driver_name,
        layers=["my_lyr"],
    )
 
-   # Extract only the first 10 geometrical/geographical features from
-   # the layer "my_lyr"
+   # Extract only the first 10 geometrical features from the layer
+   # "my_lyr"
    lyr_filter = LayerFilter(fids=list(range(10)))
    geoms_my_lyr_10 = extract_geoms_from_file(
        filename=filename,
@@ -145,13 +146,13 @@ Write a geometry dataset to disk
 
 .. warning::
    When writing to disk, *GeomCompare* assumes that all geometrical
-   features have the same geometry
-   type. :py:func:`write_geoms_to_file` will not check for geometry
-   type homogeneity and will instead throw an error if the features
-   have different geometry types. If the features have different
-   geometry types, you can still group them into multiple datasets of
-   homogeneous geometry type, and write these datasets to the same
-   file on different layers, if the data format supports it, as shown below.
+   features have the same geometry type. :func:`.write_geoms_to_file`
+   will not check for geometry type homogeneity and will instead throw
+   an error if the features have different geometry types. If the
+   features have different geometry types, you can still group them
+   into multiple datasets of homogeneous geometry type, and write
+   these datasets to the same file on different layers, if the data
+   format supports it, as shown below.
 
 **Write a list of geometrical features to Shapefile:**
 
@@ -198,6 +199,120 @@ Write a geometry dataset to disk
 
 .. note::
    If the ``geoms_epsg`` parameter is given, and the layer where the
-   geometrical/geographical features are to be written on has a
-   different Spatial Reference System, the geometries' coordinates
-   will be re-projected on-the-fly.
+   geometrical features are to be written on has a different Spatial
+   Reference System, the geometries' coordinates will be re-projected
+   on-the-fly.
+
+
+Comparing datasets
+------------------
+
+*GeomCompare* provides three main classes that can be used to compare
+two datasets of geometrical features:
+
+- :class:`.SQLiteGeomRefDB`
+- :class:`.PostGISGeomRefDB`
+- :class:`.RtreeGeomRefDB`
+
+These classes present an interface to store or give access to a
+*reference* dataset/database of geometrical features, to which a
+*test* dataset can be compared. Instances of these classes present a
+similar API, but they all have pros and cons when compared against
+each others. Presently, the class :class:`.SQLiteGeomRefDB` gives more
+flexibility to the user and will therefore be used in the following
+examples.
+
+Comparison of two geometries
+""""""""""""""""""""""""""""
+
+The main classes provided by *GeomCompare* delegates the comparison of
+two geometrical features to an external function. This can be a
+user-defined function, or one of the few comparison functions provided
+by *GeomCompare*. These functions' signature must match the following
+template:
+
+``comparison_function(gtest, gref) -> bool``
+
+where the first positional argument ``gtest`` is the *test* geometry
+(:ref:`shapely geometrical object <shapely:objects>`), and where the
+second positional argument ``gref`` is the *reference* geometry. If
+the comparison function finds that the input geometries are similar,
+it must return ``True``. It must return ``False`` for different
+geometries.
+
+.. code-block:: python
+
+   from shapely.geometry import Polygon
+
+   from geomcompare.comparefunc import polygons_area_match
+
+   # The dispatch function "polygons_area_match" is not itself a
+   # comparison function, but it returns comparison functions with the
+   # right signature instead. The way the returned function compare
+   # two geometries depends on the values passed as arguments to
+   # "polygons_area_match".
+
+   # Use Intersection over Union metric for comparison
+   strategy = "IoU"
+   threshold = 0.7
+   comparison_f = polygons_area_match(strategy, threshold)
+
+   # Reference polygon
+   poly_ref = Polygon(((0, 0), (1, 0), (1, 1), (0, 1)))
+
+   # Test polygons
+   poly_test1 = Polygon(((0, 0), (0.5, 0), (0.5, 1), (0, 1)))
+   poly_test2 = Polygon(((0, 0), (0.75, 0), (0.75, 1), (0, 1)))
+
+   comparison_f(poly_test1, poly_ref) # returns False: IoU < 0.7
+   comparison_f(poly_test1, poly_ref) # returns True: IoU >= 0.7
+
+The comparison function will be passed as argument to one of the
+methods of the main classes' instances to compare *test* and
+*reference* geometries.
+
+Managing a reference dataset
+""""""""""""""""""""""""""""
+
+The following code examples shows how to manage a *reference* geometry
+dataset using the :class:`.SQLiteGeomRefDB` class. Internally,
+instances of this class uses a SQLite database (with spatialite
+extension) to store the *reference* geometries.
+
+**Initialize a SQLiteGeomRefDB instance and populate it with
+geometries:**
+
+.. code-block:: python
+
+   from geomcompare import SQLiteGeomRefDB
+
+   # Start with an empty instance.
+   geomref = SQLiteGeomRefDB()
+
+   filename = "/path/to/reference/dataset.shp"
+   driver_name = "ESRI Shapefile" # driver name for opening shapefiles
+
+   # Get an iterator of the reference geometries, let us assume that
+   # the geometries are polygons.
+   ref_polys = extract_geoms_from_file(filename, driver_name)
+
+   # Add the geometries to the SQLiteGeomRefDB instance.
+   geomref.add_geometries(
+       ref_polys,
+       geom_type="Polygon",
+       geoms_epsg=25833,
+       geoms_tab_name="my_ref_polys",
+   )
+
+The code above instantiates a :class:`.SQLiteGeomRefDB` object, which
+internally creates a SQLite database in *RAM*, and adds *reference*
+polygons from a *shapefile* to a table named "my_ref_polys". As we
+have created a new database, the ``geom_type`` and parameter of
+:meth:`~.SQLiteGeomRefDB.add_geometries` must be passed an argument,
+since the geometry type is required by *spatialite* when creating a
+new geometry column in a table of the database. If the
+:attr:`~.SQLiteGeomRefDB.default_epsg` was not set (either when
+creating the instance or at least before adding the new geometries),
+``geoms_epsg`` (identifying the spatial reference system of the input
+*reference* geometries) must also be given when calling
+:meth:`~.SQLiteGeomRefDB.add_geometries`.

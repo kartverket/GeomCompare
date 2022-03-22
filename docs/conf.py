@@ -35,6 +35,8 @@ except ImportError:
 
 output_dir = os.path.join(__location__, "api")
 module_dir = os.path.join(__location__, "../src/geomcompare")
+# can be added to sphinx-apidoc command line to remove docstring from __init__.py
+# path2init = os.path.join(module_dir, "__init__.py")
 try:
     shutil.rmtree(output_dir)
 except FileNotFoundError:
@@ -45,7 +47,7 @@ try:
 
     apidoc.OPTIONS.remove("undoc-members")
 
-    cmd_line = f"sphinx-apidoc --implicit-namespaces -f -o {output_dir} {module_dir}"
+    cmd_line = f"sphinx-apidoc --implicit-namespaces -M -f -o {output_dir} {module_dir}"
 
     args = cmd_line.split(" ")
     if tuple(sphinx.__version__.split(".")) >= ("1", "7"):
@@ -295,6 +297,8 @@ intersphinx_mapping = {
     "scipy": ("https://docs.scipy.org/doc/scipy/reference", None),
     "setuptools": ("https://setuptools.readthedocs.io/en/stable/", None),
     "pyscaffold": ("https://pyscaffold.org/en/stable", None),
+    "shapely": ("https://shapely.readthedocs.io/en/stable/", None),
+    "geomcompare": ("https://geomcompare.readthedocs.io/en/latest/", None),
 }
 
 print(f"loading configurations for {project} {version} ...", file=sys.stderr)

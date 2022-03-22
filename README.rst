@@ -24,15 +24,14 @@ GeomCompare
 ===========
 
 
-Compare two sets of geometrical/geographical features.
+Compare two sets of geometrical features.
 
 
 *GeomCompare* provides multiple tools for comparing two independant
-sets of geometrical/geographical features. It can be used to identify
-features with similar geometry/geography (based on pre-defined
-similarity functions) found in both sets, as well features with
-geometry/geography that are found in only one of the
-sets. *GeomCompare* defines a few similarity functions, but it
+sets of geometrical features. It can be used to identify features with
+similar geometry (based on pre-defined similarity functions) found in
+both sets, as well features with geometry that are found in only one
+of the sets. *GeomCompare* defines a few similarity functions, but it
 possible for the user to define its own customized similarity
 functions.
 
@@ -95,3 +94,11 @@ A *Docker* image for *GeomCompare* is also available on *DockerHub*:
 For more information on *Docker* and command-line arguments, see:
 https://docs.docker.com/ and
 https://docs.docker.com/engine/reference/run/ .
+
+
+Usage
+-----
+
+For guidance on how to use *GeomCompare*, a user guide and API
+documentation are available on the project's
+homepage (https://geomcompare.readthedocs.io/en/latest/).

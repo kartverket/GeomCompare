@@ -8,16 +8,16 @@ Contents
 ========
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    Overview <readme>
    Getting Started <gettingstarted>
- .. Contributions & Help <contributing>
    License <license>
    Authors <authors>
    Changelog <changelog>
    Module Reference <api/modules>
 
+.. Contributions & Help <contributing>
 
 Indices and tables
 ==================
