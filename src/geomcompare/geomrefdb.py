@@ -20,7 +20,7 @@ import shapely.ops
 from pyproj.exceptions import CRSError
 from shapely import speedups, wkb
 
-from .comparefunc import geoms_always_match
+from .comparefunc import _geoms_always_match
 from ._geomrefdb_abc import GeomRefDB
 from .geomutils import _geom_type_mapping, get_transform_func, _to_2D, _unchanged_geom, GeomObject
 from .io import _setup_logger, _update_logger, GeometryIterable
@@ -983,7 +983,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         ## bounding boxes of the stored geometries, without further
         ## assessment of whether geometries match each others.
         if geoms_match is None:
-            geoms_match = geoms_always_match
+            geoms_match = _geoms_always_match
         ## Default search frame is the input geometry itself.
         if get_search_frame is None:
             get_search_frame = _unchanged_geom
@@ -995,7 +995,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         db_info = self.db_geom_info()
         tab_info = db_info.get(geoms_tab_name, None)
         if tab_info is None:
-            raise RuntimeError("No {!r} table was found in the database!")
+            raise RuntimeError(f"No {geoms_tab_name!r} table was found in the database!")
         else:
             query_kwargs["table"] = geoms_tab_name
             tab_epsg = tab_info["srid"]
@@ -1142,7 +1142,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         ## bounding boxes of the stored geometries, without further
         ## assessment of whether geometries match.
         if geoms_match is None:
-            geoms_match = geoms_always_match
+            geoms_match = _geoms_always_match
         ## Default search frame is the input geometry itself.
         if get_search_frame is None:
             get_search_frame = _unchanged_geom
@@ -1154,7 +1154,7 @@ class SQLiteGeomRefDB(GeomRefDB):
         db_info = self.db_geom_info()
         tab_info = db_info.get(geoms_tab_name, None)
         if tab_info is None:
-            raise RuntimeError("No {!r} table was found in the database!")
+            raise RuntimeError(f"No {geoms_tab_name!r} table was found in the database!")
         else:
             query_kwargs["table"] = geoms_tab_name
             tab_epsg = tab_info["srid"]

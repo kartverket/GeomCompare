@@ -13,7 +13,7 @@ def dispatch_function(func):
     dispatch_funcs.append(func.__name__)
     return func
 
-def geoms_always_match(gtest, gref):
+def _geoms_always_match(gtest, gref):
     return True
 
 def _perc_area_ptest_overlap(gtest, gref, threshold=None):
@@ -58,4 +58,3 @@ def polygons_area_match(strategy, threshold):
         raise ValueError("The threshold parameter must passed a floating point "
                          "number between 0.0 (excluded) and 1.0 (included)!")
     return partial(_strategy_mapping[strategy], threshold=float(threshold))
-
