@@ -998,20 +998,20 @@ class SQLiteGeomRefDB(GeomRefDB):
             raise RuntimeError("No {!r} table was found in the database!")
         else:
             query_kwargs["table"] = geoms_tab_name
-            db_epsg = tab_info["srid"]
+            tab_epsg = tab_info["srid"]
         if geoms_epsg is None:
-            geoms_epsg = db_epsg
+            geoms_epsg = tab_epsg
         else:
             try:
                 geoms_epsg = int(geoms_epsg)
                 _ = pyproj.CRS(geoms_epsg)
             except (CRSError, ValueError, TypeError):
                 raise ValueError(f"{geoms_epsg!r} is not a valid EPSG code!")
-            if geoms_epsg != db_epsg:
-                transform_geom = get_transform_func(geoms_epsg, db_epsg)
+            if geoms_epsg != tab_epsg:
+                transform_geom = get_transform_func(geoms_epsg, tab_epsg)
                 if aoi_geom is not None:
                     aoi_geom = transform_geom(aoi_geom)
-        query_kwargs["epsg"] = db_epsg
+        query_kwargs["epsg"] = tab_epsg
         if aoi_geom is not None:
             query_kwargs["aoiwkt"] = aoi_geom.wkt
         if ncores is not None:
@@ -1157,20 +1157,20 @@ class SQLiteGeomRefDB(GeomRefDB):
             raise RuntimeError("No {!r} table was found in the database!")
         else:
             query_kwargs["table"] = geoms_tab_name
-            db_epsg = tab_info["srid"]
+            tab_epsg = tab_info["srid"]
         if geoms_epsg is None:
-            geoms_epsg = db_epsg
+            geoms_epsg = tab_epsg
         else:
             try:
                 geoms_epsg = int(geoms_epsg)
                 _ = pyproj.CRS(geoms_epsg)
             except (CRSError, ValueError):
                 raise ValueError(f"{geoms_epsg!r} is not a valid EPSG code!")
-            if geoms_epsg != db_epsg:
-                transform_geom = get_transform_func(geoms_epsg, db_epsg)
+            if geoms_epsg != tab_epsg:
+                transform_geom = get_transform_func(geoms_epsg, tab_epsg)
                 if aoi_geom is not None:
                     aoi_geom = transform_geom(aoi_geom)
-        query_kwargs["epsg"] = db_epsg
+        query_kwargs["epsg"] = tab_epsg
         if aoi_geom is not None:
             query_kwargs["aoiwkt"] = aoi_geom.wkt
         if ncores is not None:
@@ -1313,18 +1313,18 @@ class SQLiteGeomRefDB(GeomRefDB):
             )
             geom_type = tab_info["geom_type"]
         query_kwargs["table"] = geoms_tab_name
-        db_epsg = tab_info["srid"]
-        query_kwargs["epsg"] = db_epsg
+        tab_epsg = tab_info["srid"]
+        query_kwargs["epsg"] = tab_epsg
         if geoms_epsg is None:
-            geoms_epsg = db_epsg
+            geoms_epsg = tab_epsg
         else:
             try:
                 geoms_epsg = int(geoms_epsg)
                 _ = pyproj.CRS(geoms_epsg)
             except (CRSError, ValueError, TypeError):
                 raise ValueError(f"{geoms_epsg!r} is not a valid EPSG code!")
-            if geoms_epsg != db_epsg and aoi_geom is not None:
-                transform_aoi = get_transform_func(geoms_epsg, db_epsg)
+            if geoms_epsg != tab_epsg and aoi_geom is not None:
+                transform_aoi = get_transform_func(geoms_epsg, tab_epsg)
                 aoi_geom = transform_aoi(aoi_geom)
         if aoi_geom is not None:
             query_kwargs["aoiwkt"] = aoi_geom.wkt
@@ -1371,14 +1371,14 @@ class SQLiteGeomRefDB(GeomRefDB):
                 ncores,
                 geoms_iter,
                 method_name="false_positives",
-                geoms_epsg=db_epsg,
+                geoms_epsg=tab_epsg,
                 geoms_match=geoms_match,
                 get_search_frame=get_search_frame,
             )
         else:
             mg_gen = input_geoms_db.false_positives(
                 geoms_iter,
-                geoms_epsg=db_epsg,
+                geoms_epsg=tab_epsg,
                 geoms_match=geoms_match,
                 get_search_frame=get_search_frame,
             )
