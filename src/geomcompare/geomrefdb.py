@@ -826,7 +826,7 @@ class SQLiteGeomRefDB(GeomRefDB):
 
         Returns
         -------
-        ``str``
+        `str`
             Template of the SQL query.
         """
         query = "SELECT AsBinary(geometry) FROM {{table}}"
@@ -998,19 +998,20 @@ class SQLiteGeomRefDB(GeomRefDB):
             raise RuntimeError("No {!r} table was found in the database!")
         else:
             query_kwargs["table"] = geoms_tab_name
+            db_epsg = tab_info["srid"]
         if geoms_epsg is None:
-            geoms_epsg = tab_info["srid"]
+            geoms_epsg = db_epsg
         else:
             try:
                 geoms_epsg = int(geoms_epsg)
                 _ = pyproj.CRS(geoms_epsg)
             except (CRSError, ValueError, TypeError):
                 raise ValueError(f"{geoms_epsg!r} is not a valid EPSG code!")
-            if geoms_epsg != tab_info["srid"]:
-                transform_geom = get_transform_func(geoms_epsg, tab_info["srid"])
+            if geoms_epsg != db_epsg:
+                transform_geom = get_transform_func(geoms_epsg, db_epsg)
                 if aoi_geom is not None:
                     aoi_geom = transform_geom(aoi_geom)
-        query_kwargs["epsg"] = geoms_epsg
+        query_kwargs["epsg"] = db_epsg
         if aoi_geom is not None:
             query_kwargs["aoiwkt"] = aoi_geom.wkt
         if ncores is not None:
@@ -1156,19 +1157,20 @@ class SQLiteGeomRefDB(GeomRefDB):
             raise RuntimeError("No {!r} table was found in the database!")
         else:
             query_kwargs["table"] = geoms_tab_name
+            db_epsg = tab_info["srid"]
         if geoms_epsg is None:
-            geoms_epsg = tab_info["srid"]
+            geoms_epsg = db_epsg
         else:
             try:
                 geoms_epsg = int(geoms_epsg)
                 _ = pyproj.CRS(geoms_epsg)
             except (CRSError, ValueError):
                 raise ValueError(f"{geoms_epsg!r} is not a valid EPSG code!")
-            if geoms_epsg != tab_info["srid"]:
-                transform_geom = get_transform_func(geoms_epsg, tab_info["srid"])
+            if geoms_epsg != db_epsg:
+                transform_geom = get_transform_func(geoms_epsg, db_epsg)
                 if aoi_geom is not None:
                     aoi_geom = transform_geom(aoi_geom)
-        query_kwargs["epsg"] = geoms_epsg
+        query_kwargs["epsg"] = db_epsg
         if aoi_geom is not None:
             query_kwargs["aoiwkt"] = aoi_geom.wkt
         if ncores is not None:
