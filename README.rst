@@ -55,7 +55,7 @@ user need to install the following:
 * ``rtree``
 * ``pyproj``
 * ``gdal`` (core libraries and Python bindings)
-* ``spatialite``
+* ``spatialite`` (SQLite extension library, not a python package)
 
    .. note::
 
@@ -67,6 +67,9 @@ user need to install the following:
 	 conn = sqlite3.connect(":memory:")
 	 conn.enable_load_extension(True)
 	 conn.load_extension("mod_spatialite")
+
+All dependencies above are *pip-installable*, except for ``gdal`` and
+``spatialite`` which are non-(pure-)python external libraries.
 
 
 PIP
@@ -101,4 +104,4 @@ Usage
 
 For guidance on how to use *GeomCompare*, a user guide and API
 documentation are available on the project's
-homepage (https://geomcompare.readthedocs.io/en/latest/).
+homepage (https://geomcompare.readthedocs.io/).

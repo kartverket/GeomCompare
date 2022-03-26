@@ -8,7 +8,7 @@ independant sets of geometrical features.
 
 Documentation for *GeomCompare* is available in the form of docstrings
 provided with the code, as well as on the project's homepage
-`<https://geomcompare.readthedocs.io/en/latest/>`_.
+`<https://geomcompare.readthedocs.io/>`_.
 
 Available submodules
 --------------------
