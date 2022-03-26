@@ -27,6 +27,7 @@ requirements:
     - rtree
     - pyproj
     - gdal
+    - libspatialite
 
 test:
   imports:
