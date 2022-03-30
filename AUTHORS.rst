@@ -2,4 +2,4 @@
 Contributors
 ============
 
-* Mathieu Tachon <tachon.mathieu@protonmail.com> - Main author
+* Mathieu Tachon <Mathieu.Tachon@kartverket.no> - Main author
