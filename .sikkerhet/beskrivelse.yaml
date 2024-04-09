@@ -2,4 +2,4 @@ version: 2.0
 organization: IT
 product: KI objekt- og endringsdeteksjon
 repo_types: [Tool,Library]
-platforms: [OS_VM,LOKALT]]
+platforms: [OS_VM,LOKALT]
