@@ -1,0 +1,38 @@
+# nonk8s
+apiVersion: "backstage.io/v1alpha1"
+kind: "Component"
+metadata:
+  name: "GeomCompare"
+  tags:
+  - "private"
+  - "public"
+spec:
+  type: "service"
+  lifecycle: "production"
+  owner: "it"
+---
+apiVersion: "backstage.io/v1alpha1"
+kind: "Group"
+metadata:
+  name: "security_champion_GeomCompare"
+  title: "Security Champion GeomCompare"
+spec:
+  type: "security_champion"
+  parent: "it_security_champions"
+  members:
+  - "pamroe"
+  children:
+  - "resource:GeomCompare"
+---
+apiVersion: "backstage.io/v1alpha1"
+kind: "Resource"
+metadata:
+  name: "GeomCompare"
+  links:
+  - url: "https://github.com/kartverket/GeomCompare"
+    title: "GeomCompare på GitHub"
+spec:
+  type: "repo"
+  owner: "security_champion_GeomCompare"
+  dependencyOf:
+  - "component:GeomCompare"
